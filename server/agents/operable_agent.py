@@ -10,7 +10,7 @@ class OperableAgent:
     
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
+        self.model = os.getenv("OPENAI_MODEL", "gpt-5.1")
         self.category = "operable"
     
     async def fix_issues(self, issues: List[Issue]) -> List[Fix]:

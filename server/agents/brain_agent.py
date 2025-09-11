@@ -11,7 +11,7 @@ from models.job import Issue, Fix
 class BrainAgent:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
+        self.model = os.getenv("OPENAI_MODEL", "gpt-5.1")
     
     async def analyze_files(self, job_id: str) -> List[Issue]:
         """Analyze files and detect accessibility issues using AST analysis"""
@@ -130,37 +130,11 @@ class BrainAgent:
         }
     
     async def _generate_work_plan(self, issues: List[Issue]) -> Dict[str, Any]:
-        """Generate a structured work plan for POUR agents"""
-        classified_issues = self._classify_issues(issues)
+        """Generate a detailed structured work plan for POUR agents"""
+        from services.work_plan_service import WorkPlanService
         
-        work_plan = {
-            "total_issues": len(issues),
-            "categories": {},
-            "priority_order": ["perceivable", "operable", "understandable", "robust"],
-            "estimated_time": 0
-        }
-        
-        for category, category_issues in classified_issues.items():
-            if category_issues:
-                # Calculate priority and estimated time
-                high_priority = len([i for i in category_issues if i.severity == "high"])
-                medium_priority = len([i for i in category_issues if i.severity == "medium"])
-                low_priority = len([i for i in category_issues if i.severity == "low"])
-                
-                estimated_time = (high_priority * 2) + (medium_priority * 1) + (low_priority * 0.5)
-                
-                work_plan["categories"][category] = {
-                    "issues_count": len(category_issues),
-                    "high_priority": high_priority,
-                    "medium_priority": medium_priority,
-                    "low_priority": low_priority,
-                    "estimated_time_minutes": estimated_time,
-                    "issues": [issue.dict() for issue in category_issues]
-                }
-                
-                work_plan["estimated_time"] += estimated_time
-        
-        return work_plan
+        work_plan_service = WorkPlanService()
+        return work_plan_service.generate_work_plan(issues)
     
     async def _handle_residual_issues(self, job_id: str, validation_results: Dict[str, Any], pour_agents) -> List[Fix]:
         """Handle residual issues by re-routing to appropriate agents"""

@@ -10,7 +10,7 @@ class PerceivableAgent:
     
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
+        self.model = os.getenv("OPENAI_MODEL", "gpt-5.1")
         self.category = "perceivable"
     
     async def fix_issues(self, issues: List[Issue]) -> List[Fix]:
@@ -146,7 +146,7 @@ class PerceivableAgent:
                     file_path=issue.file_path,
                     before_code=fix_data["before_code"],
                     after_code=fix_data["after_code"],
-                    diff=self._create_diff(fix_data["before_code"], fix_data["after_code"]),
+                    diff=self._create_unified_diff(fix_data["before_code"], fix_data["after_code"], issue.file_path, issue.line_start),
                     confidence=fix_data["confidence"],
                     applied=True
                 )
@@ -170,3 +170,9 @@ class PerceivableAgent:
                 diff_lines.append(f"  {b}")
         
         return '\n'.join(diff_lines)
+    
+    def _create_unified_diff(self, before: str, after: str, file_path: str, line_start: int) -> str:
+        """Create a unified diff between before and after code"""
+        from services.diff_service import DiffService
+        diff_service = DiffService()
+        return diff_service.generate_unified_diff(before, after, file_path, line_start)

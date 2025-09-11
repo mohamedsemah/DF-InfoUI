@@ -38,7 +38,19 @@ class ASTService:
         return all_issues
     
     async def _analyze_js_ts_ast(self, file_path: Path) -> List[Issue]:
-        """Analyze JS/TS/JSX/TSX files using Babel AST"""
+        """Analyze JS/TS/JSX/TSX files using Babel AST with esprima fallback"""
+        try:
+            # Try Babel first, fallback to esprima if needed
+            issues = await self._analyze_with_babel(file_path)
+            if not issues:
+                issues = await self._analyze_with_esprima(file_path)
+            return issues
+        except Exception as e:
+            print(f"Error analyzing {file_path} with AST: {e}")
+            return []
+    
+    async def _analyze_with_babel(self, file_path: Path) -> List[Issue]:
+        """Analyze using Babel parser"""
         try:
             # Create a Node.js script for Babel AST analysis
             babel_script = f"""
@@ -189,6 +201,137 @@ class ASTService:
         
         except Exception as e:
             print(f"Error in AST analysis for {file_path}: {e}")
+            return []
+    
+    async def _analyze_with_esprima(self, file_path: Path) -> List[Issue]:
+        """Analyze using esprima parser as fallback"""
+        try:
+            # Create a Node.js script for esprima AST analysis
+            esprima_script = f"""
+            const fs = require('fs');
+            const esprima = require('esprima');
+            
+            const filePath = '{file_path}';
+            const content = fs.readFileSync(filePath, 'utf8');
+            
+            const issues = [];
+            
+            try {{
+                // Parse the file with esprima
+                const ast = esprima.parseScript(content, {{
+                    loc: true,
+                    range: true,
+                    tokens: true,
+                    comment: true
+                }});
+                
+                // Simple accessibility checks
+                function checkAccessibility(node) {{
+                    if (node.type === 'CallExpression') {{
+                        if (node.callee && node.callee.name === 'document') {{
+                            if (node.arguments && node.arguments.length > 0) {{
+                                const arg = node.arguments[0];
+                                if (arg.type === 'Literal' && typeof arg.value === 'string') {{
+                                    if (arg.value.includes('getElementById') && !arg.value.includes('aria-')) {{
+                                        issues.push({{
+                                            id: `${{filePath}}_${{node.loc.start.line}}_missing_aria`,
+                                            file_path: filePath,
+                                            line_start: node.loc.start.line,
+                                            line_end: node.loc.end.line,
+                                            category: 'operable',
+                                            severity: 'medium',
+                                            description: 'Element may need ARIA attributes for accessibility',
+                                            code_snippet: content.split('\\n').slice(node.loc.start.line - 1, node.loc.end.line).join('\\n'),
+                                            rule_id: 'aria-required'
+                                        }});
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                    
+                    if (node.type === 'Literal' && typeof node.value === 'string') {{
+                        if (node.value.includes('onclick') || node.value.includes('onkeydown')) {{
+                            issues.push({{
+                                id: `${{filePath}}_${{node.loc.start.line}}_event_handler`,
+                                file_path: filePath,
+                                line_start: node.loc.start.line,
+                                line_end: node.loc.end.line,
+                                category: 'operable',
+                                severity: 'high',
+                                description: 'Event handlers should be accessible via keyboard',
+                                code_snippet: content.split('\\n').slice(node.loc.start.line - 1, node.loc.end.line).join('\\n'),
+                                rule_id: 'keyboard-accessible'
+                            }});
+                        }}
+                    }}
+                }}
+                
+                // Traverse AST
+                function traverse(node) {{
+                    if (node && typeof node === 'object') {{
+                        checkAccessibility(node);
+                        for (const key in node) {{
+                            if (node.hasOwnProperty(key) && typeof node[key] === 'object') {{
+                                traverse(node[key]);
+                            }}
+                        }}
+                    }}
+                }}
+                
+                traverse(ast);
+                
+                console.log(JSON.stringify(issues));
+                
+            }} catch (error) {{
+                console.error('Esprima parsing error:', error.message);
+                console.log('[]');
+            }}
+            """
+            
+            # Write script to temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                f.write(esprima_script)
+                script_path = f.name
+            
+            try:
+                # Run the script
+                result = subprocess.run(
+                    ['node', script_path],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(file_path.parent)
+                )
+                
+                if result.returncode == 0:
+                    issues_data = json.loads(result.stdout)
+                    issues = []
+                    
+                    for issue_data in issues_data:
+                        issue = Issue(
+                            id=issue_data['id'],
+                            file_path=issue_data['file_path'],
+                            line_start=issue_data['line_start'],
+                            line_end=issue_data['line_end'],
+                            category=issue_data['category'],
+                            severity=issue_data['severity'],
+                            description=issue_data['description'],
+                            code_snippet=issue_data['code_snippet'],
+                            rule_id=issue_data['rule_id']
+                        )
+                        issues.append(issue)
+                    
+                    return issues
+                else:
+                    print(f"Esprima analysis failed for {file_path}: {result.stderr}")
+                    return []
+            
+            finally:
+                # Clean up script file
+                os.unlink(script_path)
+        
+        except Exception as e:
+            print(f"Error analyzing {file_path} with esprima: {e}")
             return []
     
     async def _analyze_css_ast(self, file_path: Path) -> List[Issue]:

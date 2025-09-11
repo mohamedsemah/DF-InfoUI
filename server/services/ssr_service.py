@@ -38,8 +38,105 @@ class SSRService:
         
         return rendered_files
     
+    async def _render_with_rollup(self, jsx_file: Path, output_dir: Path) -> Optional[Path]:
+        """Render JSX/TSX using rollup bundler for better SSR"""
+        try:
+            # Create rollup config
+            rollup_config = f"""
+            import babel from '@rollup/plugin-babel';
+            import resolve from '@rollup/plugin-node-resolve';
+            import commonjs from '@rollup/plugin-commonjs';
+            
+            export default {{
+                input: '{jsx_file}',
+                output: {{
+                    file: '{output_dir / (jsx_file.stem + '.bundle.js')}',
+                    format: 'iife',
+                    name: 'Component'
+                }},
+                plugins: [
+                    resolve(),
+                    commonjs(),
+                    babel({{
+                        presets: ['@babel/preset-react', '@babel/preset-typescript'],
+                        plugins: ['@babel/plugin-transform-react-jsx'],
+                        babelHelpers: 'bundled'
+                    }})
+                ]
+            }};
+            """
+            
+            # Create rollup config file
+            config_path = output_dir / 'rollup.config.js'
+            with open(config_path, 'w') as f:
+                f.write(rollup_config)
+            
+            try:
+                # Run rollup
+                result = subprocess.run(
+                    ['rollup', '-c', str(config_path)],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(output_dir)
+                )
+                
+                if result.returncode == 0:
+                    # Create HTML wrapper
+                    bundle_file = output_dir / (jsx_file.stem + '.bundle.js')
+                    html_file = output_dir / (jsx_file.stem + '.html')
+                    
+                    if bundle_file.exists():
+                        html_content = f"""
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Rendered Component - {jsx_file.name}</title>
+                        </head>
+                        <body>
+                            <div id="root">
+                                <!-- Component will be rendered here -->
+                            </div>
+                            <script src="{bundle_file.name}"></script>
+                        </body>
+                        </html>
+                        """
+                        
+                        with open(html_file, 'w') as f:
+                            f.write(html_content)
+                        
+                        return html_file
+                else:
+                    print(f"Rollup rendering failed for {jsx_file}: {result.stderr}")
+            
+            finally:
+                # Clean up config file
+                if config_path.exists():
+                    config_path.unlink()
+        
+        except Exception as e:
+            print(f"Rollup rendering error for {jsx_file}: {e}")
+        
+        return None
+    
     async def _render_jsx_to_html(self, jsx_file: Path, output_dir: Path) -> Optional[Path]:
-        """Render a single JSX/TSX file to HTML"""
+        """Render a single JSX/TSX file to HTML using rollup + Babel fallback"""
+        try:
+            # Try rollup first for better SSR
+            result = await self._render_with_rollup(jsx_file, output_dir)
+            if result:
+                return result
+            
+            # Fallback to Babel if rollup fails
+            return await self._render_with_babel(jsx_file, output_dir)
+        
+        except Exception as e:
+            print(f"Error rendering {jsx_file}: {e}")
+            return None
+    
+    async def _render_with_babel(self, jsx_file: Path, output_dir: Path) -> Optional[Path]:
+        """Render JSX/TSX using Babel (fallback method)"""
         try:
             # Create a Node.js script for JSX rendering
             render_script = f"""

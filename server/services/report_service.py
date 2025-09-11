@@ -8,12 +8,53 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from models.job import Issue, Fix, ValidationResult
 
+# Try to import WeasyPrint, fallback to reportlab if not available
+try:
+    from weasyprint import HTML, CSS
+    from weasyprint.text.fonts import FontConfiguration
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
+
 class ReportService:
     def __init__(self):
         self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
     
     async def generate_pdf_report(self, job_id: str, issues: List[Issue], fixes: List[Fix], validation_results: Dict[str, Any]) -> Path:
         """Generate PDF report with accessibility analysis and fixes"""
+        job_dir = self.data_dir / job_id
+        pdf_path = job_dir / "report.pdf"
+        
+        # Try WeasyPrint first, fallback to reportlab
+        if WEASYPRINT_AVAILABLE:
+            try:
+                return await self._generate_weasyprint_pdf(job_id, issues, fixes, validation_results)
+            except Exception as e:
+                print(f"WeasyPrint failed, falling back to reportlab: {e}")
+        
+        return await self._generate_reportlab_pdf(job_id, issues, fixes, validation_results)
+    
+    async def _generate_weasyprint_pdf(self, job_id: str, issues: List[Issue], fixes: List[Fix], validation_results: Dict[str, Any]) -> Path:
+        """Generate PDF using WeasyPrint"""
+        job_dir = self.data_dir / job_id
+        pdf_path = job_dir / "report.pdf"
+        
+        # Generate HTML content
+        html_content = self._generate_html_report(issues, fixes, validation_results)
+        
+        # Generate CSS
+        css_content = self._generate_css_styles()
+        
+        # Create PDF
+        html_doc = HTML(string=html_content)
+        css_doc = CSS(string=css_content)
+        
+        html_doc.write_pdf(pdf_path, stylesheets=[css_doc])
+        
+        return pdf_path
+    
+    async def _generate_reportlab_pdf(self, job_id: str, issues: List[Issue], fixes: List[Fix], validation_results: Dict[str, Any]) -> Path:
+        """Generate PDF using reportlab (fallback)"""
         job_dir = self.data_dir / job_id
         pdf_path = job_dir / "report.pdf"
         
@@ -132,3 +173,337 @@ class ReportService:
         doc.build(story)
         
         return pdf_path
+    
+    def _generate_html_report(self, issues: List[Issue], fixes: List[Fix], validation_results: Dict[str, Any]) -> str:
+        """Generate HTML content for WeasyPrint PDF"""
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>DF-InfoUI Accessibility Report</title>
+        </head>
+        <body>
+            <div class="header">
+                <h1>DF-InfoUI Accessibility Report</h1>
+                <p class="subtitle">Adaptive Multi-Agent Accessibility Evaluator & Fixer</p>
+            </div>
+            
+            <div class="summary">
+                <h2>Summary</h2>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <strong>Total Issues Found:</strong> {len(issues)}
+                    </div>
+                    <div class="summary-item">
+                        <strong>Issues Fixed:</strong> {len(fixes)}
+                    </div>
+                    <div class="summary-item">
+                        <strong>Validation Passed:</strong> {'Yes' if validation_results.get('passed', False) else 'No'}
+                    </div>
+                    <div class="summary-item">
+                        <strong>Remaining Issues:</strong> {validation_results.get('remaining_issues', 0)}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="issues-section">
+                <h2>Issues by Category</h2>
+                {self._generate_issues_by_category(issues)}
+            </div>
+            
+            <div class="fixes-section">
+                <h2>Applied Fixes</h2>
+                {self._generate_fixes_html(fixes)}
+            </div>
+            
+            <div class="validation-section">
+                <h2>Validation Results</h2>
+                {self._generate_validation_html(validation_results)}
+            </div>
+        </body>
+        </html>
+        """
+        return html
+    
+    def _generate_css_styles(self) -> str:
+        """Generate CSS styles for WeasyPrint PDF"""
+        return """
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 1rem;
+        }
+        
+        .header h1 {
+            color: #007acc;
+            margin: 0;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            margin: 0.5rem 0 0 0;
+        }
+        
+        .summary {
+            margin-bottom: 2rem;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .summary-item {
+            background: #f5f5f5;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 4px solid #007acc;
+        }
+        
+        .issues-section, .fixes-section, .validation-section {
+            margin-bottom: 2rem;
+        }
+        
+        .category {
+            margin-bottom: 1.5rem;
+        }
+        
+        .category h3 {
+            color: #007acc;
+            background: #f0f8ff;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin: 0 0 1rem 0;
+        }
+        
+        .issue {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .issue-header {
+            font-weight: bold;
+            color: #d32f2f;
+            margin-bottom: 0.5rem;
+        }
+        
+        .issue-details {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .code-snippet {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            margin: 0.5rem 0;
+            white-space: pre-wrap;
+        }
+        
+        .fix {
+            background: #f0f8f0;
+            border: 1px solid #4caf50;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .fix-header {
+            font-weight: bold;
+            color: #2e7d32;
+            margin-bottom: 0.5rem;
+        }
+        
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .before, .after {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+        }
+        
+        .before h4, .after h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .validation-result {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .validation-passed {
+            border-left: 4px solid #4caf50;
+        }
+        
+        .validation-failed {
+            border-left: 4px solid #f44336;
+        }
+        
+        .validation-status {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .passed {
+            color: #4caf50;
+        }
+        
+        .failed {
+            color: #f44336;
+        }
+        
+        .errors, .warnings {
+            margin-top: 0.5rem;
+        }
+        
+        .errors ul, .warnings ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+        
+        .errors li {
+            color: #f44336;
+        }
+        
+        .warnings li {
+            color: #ff9800;
+        }
+        """
+    
+    def _generate_issues_by_category(self, issues: List[Issue]) -> str:
+        """Generate HTML for issues grouped by category"""
+        categories = {
+            'perceivable': [],
+            'operable': [],
+            'understandable': [],
+            'robust': []
+        }
+        
+        for issue in issues:
+            if issue.category in categories:
+                categories[issue.category].append(issue)
+        
+        html = ""
+        for category, category_issues in categories.items():
+            if category_issues:
+                html += f"""
+                <div class="category">
+                    <h3>{category.title()} Issues ({len(category_issues)})</h3>
+                """
+                for issue in category_issues:
+                    html += f"""
+                    <div class="issue">
+                        <div class="issue-header">{issue.rule_id or 'Unknown Rule'}</div>
+                        <div class="issue-details">
+                            <strong>File:</strong> {Path(issue.file_path).name}<br>
+                            <strong>Lines:</strong> {issue.line_start}-{issue.line_end}<br>
+                            <strong>Severity:</strong> {issue.severity}<br>
+                            <strong>Description:</strong> {issue.description}
+                        </div>
+                        <div class="code-snippet">{issue.code_snippet}</div>
+                    </div>
+                    """
+                html += "</div>"
+        
+        return html
+    
+    def _generate_fixes_html(self, fixes: List[Fix]) -> str:
+        """Generate HTML for applied fixes"""
+        html = ""
+        for fix in fixes:
+            if fix.applied:
+                html += f"""
+                <div class="fix">
+                    <div class="fix-header">Fix for {Path(fix.file_path).name}</div>
+                    <div class="fix-details">
+                        <strong>Confidence:</strong> {fix.confidence:.1%}<br>
+                        <strong>Applied:</strong> {'Yes' if fix.applied else 'No'}
+                    </div>
+                    <div class="before-after">
+                        <div class="before">
+                            <h4>Before</h4>
+                            <div class="code-snippet">{fix.before_code}</div>
+                        </div>
+                        <div class="after">
+                            <h4>After</h4>
+                            <div class="code-snippet">{fix.after_code}</div>
+                        </div>
+                    </div>
+                    <div class="code-snippet"><strong>Diff:</strong><br>{fix.diff}</div>
+                </div>
+                """
+        return html
+    
+    def _generate_validation_html(self, validation_results: Dict[str, Any]) -> str:
+        """Generate HTML for validation results"""
+        html = ""
+        if validation_results.get('results'):
+            for result in validation_results['results']:
+                status_class = "validation-passed" if result.passed else "validation-failed"
+                status_text = "PASSED" if result.passed else "FAILED"
+                status_color = "passed" if result.passed else "failed"
+                
+                html += f"""
+                <div class="validation-result {status_class}">
+                    <div class="validation-status {status_color}">
+                        {Path(result.file_path).name} - {status_text}
+                    </div>
+                """
+                
+                if result.errors:
+                    html += f"""
+                    <div class="errors">
+                        <strong>Errors:</strong>
+                        <ul>
+                    """
+                    for error in result.errors:
+                        html += f"<li>{error}</li>"
+                    html += "</ul></div>"
+                
+                if result.warnings:
+                    html += f"""
+                    <div class="warnings">
+                        <strong>Warnings:</strong>
+                        <ul>
+                    """
+                    for warning in result.warnings:
+                        html += f"<li>{warning}</li>"
+                    html += "</ul></div>"
+                
+                html += "</div>"
+        
+        return html

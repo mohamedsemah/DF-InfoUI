@@ -31,14 +31,94 @@ class FileService:
             zip_ref.extractall(original_dir)
     
     def get_original_files(self, job_id: str) -> List[Path]:
-        """Get all original files for analysis"""
+        """Get all original files for analysis with comprehensive validation"""
         original_dir = self.data_dir / job_id / "original"
         files = []
         
-        for ext in ['*.html', '*.js', '*.jsx', '*.ts', '*.tsx', '*.css']:
-            files.extend(original_dir.rglob(ext))
+        # Supported file extensions
+        supported_extensions = ['.html', '.js', '.jsx', '.ts', '.tsx', '.css']
+        
+        for ext in supported_extensions:
+            found_files = original_dir.rglob(f'*{ext}')
+            for file_path in found_files:
+                if self._validate_file_type(file_path, ext):
+                    files.append(file_path)
+                else:
+                    print(f"Skipping invalid file: {file_path}")
         
         return files
+    
+    def _validate_file_type(self, file_path: Path, expected_ext: str) -> bool:
+        """Validate that a file matches its expected type"""
+        try:
+            # Check file exists and is readable
+            if not file_path.exists() or not file_path.is_file():
+                return False
+            
+            # Check file size (max 10MB per file)
+            if file_path.stat().st_size > 10 * 1024 * 1024:
+                print(f"File too large: {file_path}")
+                return False
+            
+            # Read first few bytes to check file signature
+            with open(file_path, 'rb') as f:
+                header = f.read(1024)
+            
+            # Validate based on file extension
+            if expected_ext == '.html':
+                return self._validate_html_file(header)
+            elif expected_ext in ['.js', '.jsx']:
+                return self._validate_js_file(header)
+            elif expected_ext in ['.ts', '.tsx']:
+                return self._validate_ts_file(header)
+            elif expected_ext == '.css':
+                return self._validate_css_file(header)
+            
+            return True
+        
+        except Exception as e:
+            print(f"Error validating file {file_path}: {e}")
+            return False
+    
+    def _validate_html_file(self, header: bytes) -> bool:
+        """Validate HTML file content"""
+        try:
+            content = header.decode('utf-8', errors='ignore').lower()
+            # Check for HTML tags
+            return '<html' in content or '<!doctype' in content or '<div' in content or '<span' in content
+        except:
+            return False
+    
+    def _validate_js_file(self, header: bytes) -> bool:
+        """Validate JavaScript file content"""
+        try:
+            content = header.decode('utf-8', errors='ignore')
+            # Check for JavaScript patterns
+            js_patterns = ['function', 'const', 'let', 'var', '=>', 'import', 'export', 'require']
+            return any(pattern in content for pattern in js_patterns)
+        except:
+            return False
+    
+    def _validate_ts_file(self, header: bytes) -> bool:
+        """Validate TypeScript file content"""
+        try:
+            content = header.decode('utf-8', errors='ignore')
+            # Check for TypeScript patterns
+            ts_patterns = ['interface', 'type', 'enum', 'class', 'public', 'private', 'protected']
+            js_patterns = ['function', 'const', 'let', 'var', '=>', 'import', 'export']
+            return any(pattern in content for pattern in ts_patterns + js_patterns)
+        except:
+            return False
+    
+    def _validate_css_file(self, header: bytes) -> bool:
+        """Validate CSS file content"""
+        try:
+            content = header.decode('utf-8', errors='ignore')
+            # Check for CSS patterns
+            css_patterns = ['{', '}', ':', ';', 'color', 'font', 'margin', 'padding', 'width', 'height']
+            return any(pattern in content for pattern in css_patterns)
+        except:
+            return False
     
     async def apply_patches(self, job_id: str, fixes: List[Fix]) -> None:
         """Apply fixes to files (legacy method)"""

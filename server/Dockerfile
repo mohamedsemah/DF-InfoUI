@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Node.js dependencies for linting and validation
-RUN npm install -g eslint eslint-plugin-jsx-a11y axe-core @babel/core @babel/parser @babel/traverse postcss jsdom typescript
+RUN npm install -g eslint eslint-plugin-jsx-a11y axe-core @babel/core @babel/parser @babel/traverse postcss jsdom typescript esprima rollup @rollup/plugin-babel @rollup/plugin-node-resolve @rollup/plugin-commonjs
 
 # Copy application code
 COPY . .
