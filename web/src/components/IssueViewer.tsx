@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FileText, Code, CheckCircle } from 'lucide-react'
+import { getJobReport } from '../services/api'
 
 interface IssueViewerProps {
   jobId: string
@@ -10,78 +12,51 @@ interface IssueViewerProps {
 export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps) {
   const [expandedIssues, setExpandedIssues] = useState<Set<string>>(new Set())
 
-  // Mock data - in a real app, this would come from the API
-  const mockIssues = {
-    perceivable: [
-      {
-        id: '1',
-        file_path: 'src/components/ImageGallery.tsx',
-        line_start: 15,
-        line_end: 15,
-        category: 'perceivable',
-        severity: 'high',
-        description: 'Image missing alt attribute',
-        code_snippet: '<img src="gallery-image.jpg" />',
-        rule_id: 'img-alt'
-      },
-      {
-        id: '2',
-        file_path: 'src/styles/theme.css',
-        line_start: 42,
-        line_end: 42,
-        category: 'perceivable',
-        severity: 'medium',
-        description: 'Potential color contrast issue',
-        code_snippet: 'color: #999999;',
-        rule_id: 'color-contrast'
-      }
-    ],
-    operable: [
-      {
-        id: '3',
-        file_path: 'src/components/Form.tsx',
-        line_start: 8,
-        line_end: 8,
-        category: 'operable',
-        severity: 'high',
-        description: 'Input missing label or aria-label',
-        code_snippet: '<input type="text" name="email" />',
-        rule_id: 'label'
-      }
-    ],
-    understandable: [
-      {
-        id: '4',
-        file_path: 'src/components/Header.tsx',
-        line_start: 23,
-        line_end: 23,
-        category: 'understandable',
-        severity: 'medium',
-        description: 'Heading level skipped',
-        code_snippet: '<h3>Section Title</h3>',
-        rule_id: 'heading-order'
-      }
-    ],
-    robust: [
-      {
-        id: '5',
-        file_path: 'src/components/Button.tsx',
-        line_start: 12,
-        line_end: 12,
-        category: 'robust',
-        severity: 'low',
-        description: 'Missing ARIA role for custom button',
-        code_snippet: '<div onClick={handleClick}>Click me</div>',
-        rule_id: 'role'
-      }
-    ]
+  // Fetch real data from API
+  const { data: reportData, isLoading, error } = useQuery({
+    queryKey: ['jobReport', jobId],
+    queryFn: () => getJobReport(jobId),
+    enabled: !!jobId
+  })
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+        <h3>Loading report data...</h3>
+      </div>
+    )
   }
 
+  if (error || !reportData) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>❌</div>
+        <h3>Failed to load report data</h3>
+        <p>Please try refreshing the page.</p>
+      </div>
+    )
+  }
+
+  // Organize issues by category
+  const issuesByCategory = {
+    perceivable: reportData.issues?.filter((issue: any) => issue.category === 'perceivable') || [],
+    operable: reportData.issues?.filter((issue: any) => issue.category === 'operable') || [],
+    understandable: reportData.issues?.filter((issue: any) => issue.category === 'understandable') || [],
+    robust: reportData.issues?.filter((issue: any) => issue.category === 'robust') || []
+  }
+
+  // Get fixes for the current category
+  const currentCategoryFixes = reportData.fixes?.filter((fix: any) => {
+    const issue = reportData.issues?.find((i: any) => i.id === fix.issue_id)
+    return issue?.category === activeTab
+  }) || []
+
   const tabs = [
-    { key: 'perceivable', label: 'Perceivable', count: mockIssues.perceivable.length },
-    { key: 'operable', label: 'Operable', count: mockIssues.operable.length },
-    { key: 'understandable', label: 'Understandable', count: mockIssues.understandable.length },
-    { key: 'robust', label: 'Robust', count: mockIssues.robust.length }
+    { key: 'perceivable', label: 'Perceivable', count: issuesByCategory.perceivable.length },
+    { key: 'operable', label: 'Operable', count: issuesByCategory.operable.length },
+    { key: 'understandable', label: 'Understandable', count: issuesByCategory.understandable.length },
+    { key: 'robust', label: 'Robust', count: issuesByCategory.robust.length }
   ] as const
 
   const toggleIssue = (issueId: string) => {
@@ -140,7 +115,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
 
       {/* Issues List */}
       <div>
-        {mockIssues[activeTab].length === 0 ? (
+        {issuesByCategory[activeTab].length === 0 ? (
           <div style={{
             textAlign: 'center',
             padding: '2rem',
@@ -153,7 +128,11 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
             <p>Great job! Your code meets the {activeTab} accessibility guidelines.</p>
           </div>
         ) : (
-          mockIssues[activeTab].map(issue => (
+          issuesByCategory[activeTab].map(issue => {
+            // Find the corresponding fix for this issue
+            const fix = currentCategoryFixes.find((f: any) => f.issue_id === issue.id)
+            
+            return (
             <div key={issue.id} className={`issue-card ${issue.severity}`}>
               <div
                 style={{
@@ -198,49 +177,74 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                     </div>
                   </div>
 
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '1rem',
-                    marginTop: '1rem'
-                  }}>
-                    <div className="diff-section before">
-                      <h4 style={{ margin: '0 0 0.5rem 0' }}>Before Fix</h4>
-                      <div className="code-snippet">
-                        {issue.code_snippet}
+                  {fix ? (
+                    <>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '1rem',
+                        marginTop: '1rem'
+                      }}>
+                        <div className="diff-section before">
+                          <h4 style={{ margin: '0 0 0.5rem 0' }}>Before Fix</h4>
+                          <div className="code-snippet">
+                            {fix.before_code}
+                          </div>
+                        </div>
+                        <div className="diff-section after">
+                          <h4 style={{ margin: '0 0 0.5rem 0' }}>After Fix</h4>
+                          <div className="code-snippet">
+                            {fix.after_code}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="diff-section after">
-                      <h4 style={{ margin: '0 0 0.5rem 0' }}>After Fix</h4>
-                      <div className="code-snippet">
-                        {issue.rule_id === 'img-alt' && issue.code_snippet.includes('<img') ? 
-                          issue.code_snippet.replace('>', ' alt="Descriptive text for image">') :
-                          issue.rule_id === 'label' && issue.code_snippet.includes('<input') ?
-                          issue.code_snippet.replace('>', ' aria-label="Input field">') :
-                          issue.code_snippet + ' /* Fixed */'
-                        }
-                      </div>
-                    </div>
-                  </div>
 
-                  <div style={{
-                    marginTop: '1rem',
-                    padding: '0.75rem',
-                    backgroundColor: '#e8f5e8',
-                    borderRadius: '4px',
-                    fontSize: '0.9rem'
-                  }}>
-                    <strong>Fix Applied:</strong> {issue.rule_id === 'img-alt' ? 
-                      'Added alt attribute to image' :
-                      issue.rule_id === 'label' ?
-                      'Added aria-label to input' :
-                      'Applied accessibility fix'
-                    }
-                  </div>
+                      <div style={{
+                        marginTop: '1rem',
+                        padding: '0.75rem',
+                        backgroundColor: '#e8f5e8',
+                        borderRadius: '4px',
+                        fontSize: '0.9rem'
+                      }}>
+                        <strong>Fix Applied:</strong> {fix.applied ? 'Successfully applied' : 'Failed to apply'}
+                        {fix.confidence && (
+                          <span style={{ marginLeft: '1rem' }}>
+                            <strong>Confidence:</strong> {(fix.confidence * 100).toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+
+                      {fix.diff && (
+                        <div style={{
+                          marginTop: '1rem',
+                          padding: '0.75rem',
+                          backgroundColor: '#f5f5f5',
+                          borderRadius: '4px',
+                          fontSize: '0.9rem'
+                        }}>
+                          <h4 style={{ margin: '0 0 0.5rem 0' }}>Diff</h4>
+                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                            {fix.diff}
+                          </pre>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{
+                      marginTop: '1rem',
+                      padding: '0.75rem',
+                      backgroundColor: '#fff3cd',
+                      borderRadius: '4px',
+                      fontSize: '0.9rem'
+                    }}>
+                      <strong>No fix available</strong> - This issue was detected but no fix could be generated.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>

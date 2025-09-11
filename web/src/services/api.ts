@@ -33,3 +33,8 @@ export const downloadFixedZip = (jobId: string): string => {
 export const downloadReportPdf = (jobId: string): string => {
   return `${API_BASE_URL}/download/${jobId}/report.pdf`
 }
+
+export const getJobReport = async (jobId: string): Promise<any> => {
+  const response = await api.get(`/report/${jobId}`)
+  return response.data
+}

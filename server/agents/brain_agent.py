@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import openai
+import aiofiles
 from models.job import Issue, Fix
 
 class BrainAgent:
@@ -13,18 +14,41 @@ class BrainAgent:
         self.model = os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview")
     
     async def analyze_files(self, job_id: str) -> List[Issue]:
-        """Analyze files and detect accessibility issues"""
+        """Analyze files and detect accessibility issues using AST analysis"""
         from services.file_service import FileService
+        from services.ast_service import ASTService
         
         file_service = FileService()
+        ast_service = ASTService()
+        
+        # Use AST analysis for better issue detection
+        ast_issues = await ast_service.analyze_files_ast(job_id)
+        
+        # Also run traditional regex-based analysis as fallback
         files = file_service.get_original_files(job_id)
-        all_issues = []
+        regex_issues = []
         
         for file_path in files:
             issues = await self._analyze_file(file_path)
-            all_issues.extend(issues)
+            regex_issues.extend(issues)
+        
+        # Combine and deduplicate issues
+        all_issues = self._deduplicate_issues(ast_issues + regex_issues)
         
         return all_issues
+    
+    def _deduplicate_issues(self, issues: List[Issue]) -> List[Issue]:
+        """Remove duplicate issues based on file path and line number"""
+        seen = set()
+        unique_issues = []
+        
+        for issue in issues:
+            key = (issue.file_path, issue.line_start, issue.rule_id)
+            if key not in seen:
+                seen.add(key)
+                unique_issues.append(issue)
+        
+        return unique_issues
     
     async def coordinate_fixing_process(self, job_id: str, issues: List[Issue]) -> Dict[str, Any]:
         """Coordinate the complete fixing process with POUR agents"""
@@ -39,7 +63,8 @@ class BrainAgent:
         validation_service = ValidationService()
         report_service = ReportService()
         
-        # Step 1: Classify issues into POUR categories
+        # Step 1: Generate work plan and classify issues into POUR categories
+        work_plan = await self._generate_work_plan(issues)
         classified_issues = self._classify_issues(issues)
         
         # Step 2: Send issues to POUR agents and get fixes
@@ -61,22 +86,93 @@ class BrainAgent:
                     "fixes": fixes
                 }
         
-        # Step 3: Apply fixes to files
-        await file_service.apply_patches(job_id, all_fixes)
+        # Step 3: Apply fixes to files with line-aware patching
+        await file_service.apply_patches_with_line_awareness(job_id, all_fixes)
         
         # Step 4: Validate fixes
         validation_results = await validation_service.validate_fixes(job_id)
         
-        # Step 5: Generate final artifacts
+        # Step 5: Check for residual issues and re-route if needed
+        if validation_results.get("remaining_issues", 0) > 0:
+            print("Residual issues found, attempting re-routing...")
+            residual_fixes = await self._handle_residual_issues(job_id, validation_results, pour_agents)
+            if residual_fixes:
+                await file_service.apply_patches_with_line_awareness(job_id, residual_fixes)
+                validation_results = await validation_service.validate_fixes(job_id)
+        
+        # Step 6: Generate final artifacts
         await file_service.create_fixed_zip(job_id)
         await report_service.generate_pdf_report(job_id, issues, all_fixes, validation_results)
+        
+        # Step 7: Save metadata for frontend
+        report_data = {
+            "work_plan": work_plan,
+            "issues": [issue.dict() for issue in issues],
+            "fixes": [fix.dict() for fix in all_fixes],
+            "validation_results": validation_results,
+            "agent_reports": agent_reports
+        }
+        
+        # Save as report.json for frontend consumption
+        report_json_path = file_service.get_report_json_path(job_id)
+        async with aiofiles.open(report_json_path, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(report_data, indent=2, default=str))
+        
+        # Also save as metadata.json for internal use
+        await file_service.save_job_metadata(job_id, report_data)
         
         return {
             "total_issues": len(issues),
             "total_fixes": len(all_fixes),
             "agent_reports": agent_reports,
-            "validation_results": validation_results
+            "validation_results": validation_results,
+            "work_plan": work_plan
         }
+    
+    async def _generate_work_plan(self, issues: List[Issue]) -> Dict[str, Any]:
+        """Generate a structured work plan for POUR agents"""
+        classified_issues = self._classify_issues(issues)
+        
+        work_plan = {
+            "total_issues": len(issues),
+            "categories": {},
+            "priority_order": ["perceivable", "operable", "understandable", "robust"],
+            "estimated_time": 0
+        }
+        
+        for category, category_issues in classified_issues.items():
+            if category_issues:
+                # Calculate priority and estimated time
+                high_priority = len([i for i in category_issues if i.severity == "high"])
+                medium_priority = len([i for i in category_issues if i.severity == "medium"])
+                low_priority = len([i for i in category_issues if i.severity == "low"])
+                
+                estimated_time = (high_priority * 2) + (medium_priority * 1) + (low_priority * 0.5)
+                
+                work_plan["categories"][category] = {
+                    "issues_count": len(category_issues),
+                    "high_priority": high_priority,
+                    "medium_priority": medium_priority,
+                    "low_priority": low_priority,
+                    "estimated_time_minutes": estimated_time,
+                    "issues": [issue.dict() for issue in category_issues]
+                }
+                
+                work_plan["estimated_time"] += estimated_time
+        
+        return work_plan
+    
+    async def _handle_residual_issues(self, job_id: str, validation_results: Dict[str, Any], pour_agents) -> List[Fix]:
+        """Handle residual issues by re-routing to appropriate agents"""
+        residual_fixes = []
+        
+        # This is a simplified implementation
+        # In production, you'd analyze the validation results to identify
+        # which specific issues need re-routing
+        
+        print(f"Found {validation_results.get('remaining_issues', 0)} residual issues")
+        
+        return residual_fixes
     
     def _classify_issues(self, issues: List[Issue]) -> Dict[str, List[Issue]]:
         """Classify issues into POUR categories"""

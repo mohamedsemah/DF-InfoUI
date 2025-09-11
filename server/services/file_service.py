@@ -41,42 +41,15 @@ class FileService:
         return files
     
     async def apply_patches(self, job_id: str, fixes: List[Fix]) -> None:
-        """Apply fixes to files"""
-        job_dir = self.data_dir / job_id
-        fixed_dir = job_dir / "fixed"
-        original_dir = job_dir / "original"
+        """Apply fixes to files (legacy method)"""
+        await self.apply_patches_with_line_awareness(job_id, fixes)
+    
+    async def apply_patches_with_line_awareness(self, job_id: str, fixes: List[Fix]) -> Dict[str, Any]:
+        """Apply fixes with line-aware patching and fuzzy matching"""
+        from services.patch_service import PatchService
         
-        # Copy original files to fixed directory
-        if fixed_dir.exists():
-            shutil.rmtree(fixed_dir)
-        shutil.copytree(original_dir, fixed_dir)
-        
-        # Apply each fix
-        for fix in fixes:
-            if not fix.applied:
-                continue
-                
-            file_path = fixed_dir / fix.file_path
-            if not file_path.exists():
-                continue
-            
-            try:
-                # Read current file content
-                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                
-                # Apply the fix (simple string replacement for now)
-                # In production, use proper diff/patch libraries
-                lines = content.split('\n')
-                if fix.before_code in content:
-                    new_content = content.replace(fix.before_code, fix.after_code)
-                    
-                    async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                        await f.write(new_content)
-                    
-                    fix.applied = True
-            except Exception as e:
-                print(f"Failed to apply fix {fix.issue_id}: {e}")
+        patch_service = PatchService()
+        return await patch_service.apply_patches_with_line_awareness(job_id, fixes)
     
     async def create_fixed_zip(self, job_id: str) -> Path:
         """Create ZIP file with fixed code"""
@@ -99,6 +72,10 @@ class FileService:
     def get_report_pdf_path(self, job_id: str) -> Path:
         """Get path to PDF report"""
         return self.data_dir / job_id / "report.pdf"
+    
+    def get_report_json_path(self, job_id: str) -> Path:
+        """Get path to JSON report metadata"""
+        return self.data_dir / job_id / "report.json"
     
     async def save_job_metadata(self, job_id: str, metadata: Dict[str, Any]) -> None:
         """Save job metadata to JSON file"""

@@ -1,6 +1,7 @@
 import os
 import uuid
 import asyncio
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
@@ -8,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import aiofiles
 from dotenv import load_dotenv
 
 from agents.brain_agent import BrainAgent
@@ -130,6 +132,28 @@ async def download_report_pdf(job_id: str):
         media_type="application/pdf"
     )
 
+@app.get("/api/report/{job_id}")
+async def get_job_report(job_id: str):
+    """Get detailed job report data for frontend"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    if job.status != JobStatus.COMPLETE:
+        raise HTTPException(status_code=400, detail="Job not complete")
+    
+    # Load report data from file
+    report_path = file_service.get_report_json_path(job_id)
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report data not found")
+    
+    try:
+        async with aiofiles.open(report_path, 'r', encoding='utf-8') as f:
+            report_data = json.loads(await f.read())
+        return report_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load report data: {str(e)}")
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -156,7 +180,12 @@ async def process_job(job_id: str):
         # Brain Agent coordinates the entire fixing process
         coordination_results = await brain_agent.coordinate_fixing_process(job_id, issues)
         
-        # Stage 3: Complete
+        # Stage 3: Validation
+        job.status = JobStatus.VALIDATING
+        job.message = "Validating fixes with ESLint, axe-core, and TypeScript compilation..."
+        job.progress = 80
+        
+        # Stage 4: Complete
         job.status = JobStatus.COMPLETE
         job.message = "Processing complete! All fixes applied and validated."
         job.progress = 100
