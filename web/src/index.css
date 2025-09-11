@@ -251,3 +251,164 @@ button:focus-visible {
   background-color: #ffebee;
   color: #d32f2f;
 }
+
+/* Enhanced Diff Styles */
+.diff-container {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.diff-line {
+  display: flex;
+  min-height: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.diff-line:last-child {
+  border-bottom: none;
+}
+
+.diff-prefix {
+  width: 20px;
+  padding: 2px 4px;
+  text-align: center;
+  font-weight: bold;
+  flex-shrink: 0;
+  background-color: #f1f3f4;
+  border-right: 1px solid #e9ecef;
+}
+
+.diff-content {
+  flex: 1;
+  padding: 2px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-hunk-header {
+  background-color: #e3f2fd;
+  font-weight: bold;
+  color: #1976d2;
+}
+
+.diff-hunk-header .diff-prefix {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+
+.diff-file-header {
+  background-color: #f5f5f5;
+  font-weight: bold;
+  color: #424242;
+}
+
+.diff-file-header .diff-prefix {
+  background-color: #e0e0e0;
+  color: #212121;
+}
+
+.diff-removed {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.diff-removed .diff-prefix {
+  background-color: #ffcdd2;
+  color: #b71c1c;
+}
+
+.diff-added {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+}
+
+.diff-added .diff-prefix {
+  background-color: #c8e6c9;
+  color: #1b5e20;
+}
+
+.diff-context {
+  background-color: #ffffff;
+  color: #424242;
+}
+
+.diff-context .diff-prefix {
+  background-color: #f5f5f5;
+  color: #757575;
+}
+
+/* Enhanced Issue Card Styles */
+.issue-card.high {
+  border-left: 4px solid #d32f2f;
+  background-color: #ffebee;
+}
+
+.issue-card.medium {
+  border-left: 4px solid #f57c00;
+  background-color: #fff3e0;
+}
+
+.issue-card.low {
+  border-left: 4px solid #1976d2;
+  background-color: #e3f2fd;
+}
+
+/* Copy Button Styles */
+.copy-button {
+  transition: all 0.2s ease;
+}
+
+.copy-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.copy-button:active {
+  transform: translateY(0);
+}
+
+/* Toggle Button Styles */
+.toggle-button {
+  transition: all 0.2s ease;
+  border: 1px solid #ddd;
+  background-color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.toggle-button:hover {
+  background-color: #f5f5f5;
+  border-color: #999;
+}
+
+.toggle-button.active {
+  background-color: #e3f2fd;
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .diff-viewer {
+    grid-template-columns: 1fr;
+  }
+  
+  .diff-container {
+    font-size: 12px;
+  }
+  
+  .diff-prefix {
+    width: 16px;
+    padding: 2px;
+  }
+}

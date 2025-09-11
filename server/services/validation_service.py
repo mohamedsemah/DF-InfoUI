@@ -10,37 +10,140 @@ class ValidationService:
         self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
     
     async def validate_fixes(self, job_id: str) -> Dict[str, Any]:
-        """Validate fixes using eslint, axe-core, and TypeScript compilation"""
+        """Validate fixes using comprehensive validation collection"""
         job_dir = self.data_dir / job_id
         fixed_dir = job_dir / "fixed"
         
         validation_results = {
             "passed": True,
             "remaining_issues": 0,
-            "results": []
+            "results": [],
+            "summary": {
+                "total_files_checked": 0,
+                "files_with_issues": 0,
+                "issues_by_type": {},
+                "issues_by_severity": {"high": 0, "medium": 0, "low": 0},
+                "validation_tools_used": [],
+                "compliance_score": 0.0
+            }
         }
         
-        # Run TypeScript compilation validation
-        ts_results = await self._run_typescript_compilation(fixed_dir)
-        validation_results["results"].extend(ts_results)
+        # Run comprehensive validation
+        validation_tasks = [
+            ("TypeScript Compilation", self._run_typescript_compilation(fixed_dir)),
+            ("ESLint Accessibility", self._run_eslint_validation(fixed_dir)),
+            ("Axe-Core Validation", self._run_axe_validation(fixed_dir)),
+            ("HTML Validation", self._run_html_validation(fixed_dir)),
+            ("CSS Validation", self._run_css_validation(fixed_dir))
+        ]
         
-        # Run eslint validation
-        eslint_results = await self._run_eslint_validation(fixed_dir)
-        validation_results["results"].extend(eslint_results)
+        # Execute all validation tasks
+        for tool_name, task in validation_tasks:
+            try:
+                results = await task
+                validation_results["results"].extend(results)
+                validation_results["summary"]["validation_tools_used"].append(tool_name)
+            except Exception as e:
+                print(f"Validation tool {tool_name} failed: {e}")
+                # Add a failed result for this tool
+                validation_results["results"].append(ValidationResult(
+                    file_path="system",
+                    passed=False,
+                    errors=[f"{tool_name} validation failed: {str(e)}"],
+                    warnings=[]
+                ))
         
-        # Run axe-core validation
-        axe_results = await self._run_axe_validation(fixed_dir)
-        validation_results["results"].extend(axe_results)
-        
-        # Count remaining issues
-        validation_results["remaining_issues"] = sum(
-            1 for result in validation_results["results"] 
-            if not result.passed
-        )
-        
-        validation_results["passed"] = validation_results["remaining_issues"] == 0
+        # Analyze results comprehensively
+        validation_results.update(await self._analyze_validation_results(validation_results["results"]))
         
         return validation_results
+    
+    async def _analyze_validation_results(self, results: List[ValidationResult]) -> Dict[str, Any]:
+        """Analyze validation results to provide comprehensive insights"""
+        analysis = {
+            "remaining_issues": 0,
+            "passed": True,
+            "summary": {
+                "total_files_checked": len(set(r.file_path for r in results)),
+                "files_with_issues": 0,
+                "issues_by_type": {},
+                "issues_by_severity": {"high": 0, "medium": 0, "low": 0},
+                "compliance_score": 0.0
+            }
+        }
+        
+        files_with_issues = set()
+        total_issues = 0
+        
+        for result in results:
+            if not result.passed:
+                files_with_issues.add(result.file_path)
+                total_issues += len(result.errors) + len(result.warnings)
+                
+                # Categorize issues by type
+                for error in result.errors:
+                    issue_type = self._categorize_issue_type(error)
+                    analysis["summary"]["issues_by_type"][issue_type] = \
+                        analysis["summary"]["issues_by_type"].get(issue_type, 0) + 1
+                    
+                    # Categorize by severity
+                    severity = self._determine_issue_severity(error)
+                    analysis["summary"]["issues_by_severity"][severity] += 1
+        
+        analysis["remaining_issues"] = total_issues
+        analysis["passed"] = total_issues == 0
+        analysis["summary"]["files_with_issues"] = len(files_with_issues)
+        
+        # Calculate compliance score
+        total_files = analysis["summary"]["total_files_checked"]
+        if total_files > 0:
+            analysis["summary"]["compliance_score"] = (total_files - len(files_with_issues)) / total_files
+        
+        return analysis
+    
+    def _categorize_issue_type(self, error: str) -> str:
+        """Categorize validation error by type"""
+        error_lower = error.lower()
+        
+        if any(keyword in error_lower for keyword in ['alt', 'image', 'img']):
+            return "image_accessibility"
+        elif any(keyword in error_lower for keyword in ['aria', 'role', 'label']):
+            return "aria_accessibility"
+        elif any(keyword in error_lower for keyword in ['keyboard', 'focus', 'tabindex']):
+            return "keyboard_accessibility"
+        elif any(keyword in error_lower for keyword in ['color', 'contrast']):
+            return "visual_accessibility"
+        elif any(keyword in error_lower for keyword in ['heading', 'h1', 'h2', 'h3']):
+            return "semantic_structure"
+        elif any(keyword in error_lower for keyword in ['form', 'input', 'label']):
+            return "form_accessibility"
+        elif any(keyword in error_lower for keyword in ['link', 'href']):
+            return "link_accessibility"
+        elif any(keyword in error_lower for keyword in ['syntax', 'parse', 'compile']):
+            return "syntax_error"
+        else:
+            return "other"
+    
+    def _determine_issue_severity(self, error: str) -> str:
+        """Determine issue severity based on error content"""
+        error_lower = error.lower()
+        
+        # High severity keywords
+        if any(keyword in error_lower for keyword in [
+            'critical', 'error', 'missing alt', 'no label', 'keyboard trap',
+            'color contrast', 'focus management'
+        ]):
+            return "high"
+        
+        # Medium severity keywords
+        elif any(keyword in error_lower for keyword in [
+            'warning', 'aria', 'semantic', 'heading', 'form'
+        ]):
+            return "medium"
+        
+        # Low severity keywords
+        else:
+            return "low"
     
     async def _run_eslint_validation(self, fixed_dir: Path) -> List[ValidationResult]:
         """Run eslint with jsx-a11y plugin on fixed files"""
@@ -316,6 +419,114 @@ class ValidationService:
                     file_path=str(ts_file),
                     passed=False,
                     errors=[f"TypeScript compilation failed: {str(e)}"],
+                    warnings=[]
+                ))
+        
+        return results
+    
+    async def _run_html_validation(self, fixed_dir: Path) -> List[ValidationResult]:
+        """Run HTML validation on fixed files"""
+        results = []
+        
+        # Find all HTML files
+        html_files = list(fixed_dir.rglob('*.html'))
+        
+        for file_path in html_files:
+            try:
+                # Basic HTML structure validation
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                errors = []
+                warnings = []
+                
+                # Check for basic HTML structure
+                if not content.strip().startswith('<!DOCTYPE'):
+                    warnings.append("Missing DOCTYPE declaration")
+                
+                if '<html' not in content:
+                    errors.append("Missing <html> tag")
+                
+                if '<head>' not in content:
+                    errors.append("Missing <head> section")
+                
+                if '<body>' not in content:
+                    errors.append("Missing <body> section")
+                
+                # Check for accessibility attributes
+                if '<img' in content and 'alt=' not in content:
+                    errors.append("Images missing alt attributes")
+                
+                if '<input' in content and 'type=' not in content:
+                    warnings.append("Input elements missing type attributes")
+                
+                results.append(ValidationResult(
+                    file_path=str(file_path),
+                    passed=len(errors) == 0,
+                    errors=errors,
+                    warnings=warnings
+                ))
+                
+            except Exception as e:
+                results.append(ValidationResult(
+                    file_path=str(file_path),
+                    passed=False,
+                    errors=[f"HTML validation failed: {str(e)}"],
+                    warnings=[]
+                ))
+        
+        return results
+    
+    async def _run_css_validation(self, fixed_dir: Path) -> List[ValidationResult]:
+        """Run CSS validation on fixed files"""
+        results = []
+        
+        # Find all CSS files
+        css_files = list(fixed_dir.rglob('*.css'))
+        
+        for file_path in css_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                errors = []
+                warnings = []
+                
+                # Basic CSS syntax validation
+                lines = content.split('\n')
+                for i, line in enumerate(lines, 1):
+                    line = line.strip()
+                    if not line or line.startswith('/*') or line.startswith('*'):
+                        continue
+                    
+                    # Check for unclosed brackets
+                    if '{' in line and '}' not in line:
+                        # Check if closing bracket is in next few lines
+                        found_closing = False
+                        for j in range(i, min(i + 10, len(lines))):
+                            if '}' in lines[j]:
+                                found_closing = True
+                                break
+                        if not found_closing:
+                            errors.append(f"Unclosed CSS rule at line {i}")
+                    
+                    # Check for common CSS issues
+                    if 'color:' in line and 'background-color:' not in line:
+                        if any(color in line.lower() for color in ['#000', 'black', 'rgb(0,0,0)']):
+                            warnings.append(f"Potential contrast issue at line {i}: dark text without background")
+                
+                results.append(ValidationResult(
+                    file_path=str(file_path),
+                    passed=len(errors) == 0,
+                    errors=errors,
+                    warnings=warnings
+                ))
+                
+            except Exception as e:
+                results.append(ValidationResult(
+                    file_path=str(file_path),
+                    passed=False,
+                    errors=[f"CSS validation failed: {str(e)}"],
                     warnings=[]
                 ))
         

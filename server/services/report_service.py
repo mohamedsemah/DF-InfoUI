@@ -402,6 +402,39 @@ class ReportService:
         .warnings li {
             color: #ff9800;
         }
+        
+        .validation-summary {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .summary-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .stat {
+            background-color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .issues-by-type, .issues-by-severity, .validation-tools {
+            margin-bottom: 15px;
+        }
+        
+        .issues-by-type ul, .issues-by-severity ul {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+        
+        .validation-details {
+            margin-top: 20px;
+        }
         """
     
     def _generate_issues_by_category(self, issues: List[Issue]) -> str:
@@ -469,9 +502,64 @@ class ReportService:
         return html
     
     def _generate_validation_html(self, validation_results: Dict[str, Any]) -> str:
-        """Generate HTML for validation results"""
+        """Generate HTML for validation results with enhanced summary"""
         html = ""
+        
+        # Add validation summary if available
+        if validation_results.get('summary'):
+            summary = validation_results['summary']
+            html += f"""
+            <div class="validation-summary">
+                <h3>Validation Summary</h3>
+                <div class="summary-stats">
+                    <div class="stat">
+                        <strong>Files Checked:</strong> {summary.get('total_files_checked', 0)}
+                    </div>
+                    <div class="stat">
+                        <strong>Files with Issues:</strong> {summary.get('files_with_issues', 0)}
+                    </div>
+                    <div class="stat">
+                        <strong>Compliance Score:</strong> {summary.get('compliance_score', 0):.1%}
+                    </div>
+                </div>
+            """
+            
+            # Add issues by type
+            if summary.get('issues_by_type'):
+                html += """
+                <div class="issues-by-type">
+                    <h4>Issues by Type</h4>
+                    <ul>
+                """
+                for issue_type, count in summary['issues_by_type'].items():
+                    html += f"<li><strong>{issue_type.replace('_', ' ').title()}:</strong> {count}</li>"
+                html += "</ul></div>"
+            
+            # Add issues by severity
+            if summary.get('issues_by_severity'):
+                html += """
+                <div class="issues-by-severity">
+                    <h4>Issues by Severity</h4>
+                    <ul>
+                """
+                for severity, count in summary['issues_by_severity'].items():
+                    html += f"<li><strong>{severity.title()}:</strong> {count}</li>"
+                html += "</ul></div>"
+            
+            # Add validation tools used
+            if summary.get('validation_tools_used'):
+                html += f"""
+                <div class="validation-tools">
+                    <h4>Validation Tools Used</h4>
+                    <p>{', '.join(summary['validation_tools_used'])}</p>
+                </div>
+                """
+            
+            html += "</div>"
+        
+        # Add detailed validation results
         if validation_results.get('results'):
+            html += "<div class="validation-details"><h3>Detailed Validation Results</h3>"
             for result in validation_results['results']:
                 status_class = "validation-passed" if result.passed else "validation-failed"
                 status_text = "PASSED" if result.passed else "FAILED"
@@ -505,5 +593,6 @@ class ReportService:
                     html += "</ul></div>"
                 
                 html += "</div>"
+            html += "</div>"
         
         return html

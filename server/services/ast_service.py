@@ -190,7 +190,33 @@ class ASTService:
                 
                 if result.returncode == 0:
                     issues_data = json.loads(result.stdout)
-                    return [Issue(**issue) for issue in issues_data]
+                    issues = []
+                    
+                    for issue_data in issues_data:
+                        # Extract enhanced code snippet data
+                        snippet_data = await self.extract_code_snippets(
+                            Path(issue_data['file_path']),
+                            issue_data['line_start'],
+                            issue_data['line_end']
+                        )
+                        
+                        issue = Issue(
+                            id=issue_data['id'],
+                            file_path=issue_data['file_path'],
+                            line_start=issue_data['line_start'],
+                            line_end=issue_data['line_end'],
+                            category=issue_data['category'],
+                            severity=issue_data['severity'],
+                            description=issue_data['description'],
+                            code_snippet=issue_data['code_snippet'],
+                            rule_id=issue_data['rule_id'],
+                            code_snippet_data=snippet_data,
+                            context_lines=snippet_data.get('context_lines', 3),
+                            total_lines=snippet_data.get('total_lines')
+                        )
+                        issues.append(issue)
+                    
+                    return issues
                 else:
                     print(f"Babel AST analysis failed for {file_path}: {result.stderr}")
                     return []
@@ -308,6 +334,13 @@ class ASTService:
                     issues = []
                     
                     for issue_data in issues_data:
+                        # Extract enhanced code snippet data
+                        snippet_data = await self.extract_code_snippets(
+                            Path(issue_data['file_path']),
+                            issue_data['line_start'],
+                            issue_data['line_end']
+                        )
+                        
                         issue = Issue(
                             id=issue_data['id'],
                             file_path=issue_data['file_path'],
@@ -317,7 +350,10 @@ class ASTService:
                             severity=issue_data['severity'],
                             description=issue_data['description'],
                             code_snippet=issue_data['code_snippet'],
-                            rule_id=issue_data['rule_id']
+                            rule_id=issue_data['rule_id'],
+                            code_snippet_data=snippet_data,
+                            context_lines=snippet_data.get('context_lines', 3),
+                            total_lines=snippet_data.get('total_lines')
                         )
                         issues.append(issue)
                     
@@ -442,7 +478,33 @@ class ASTService:
                 
                 if result.returncode == 0:
                     issues_data = json.loads(result.stdout)
-                    return [Issue(**issue) for issue in issues_data]
+                    issues = []
+                    
+                    for issue_data in issues_data:
+                        # Extract enhanced code snippet data
+                        snippet_data = await self.extract_code_snippets(
+                            Path(issue_data['file_path']),
+                            issue_data['line_start'],
+                            issue_data['line_end']
+                        )
+                        
+                        issue = Issue(
+                            id=issue_data['id'],
+                            file_path=issue_data['file_path'],
+                            line_start=issue_data['line_start'],
+                            line_end=issue_data['line_end'],
+                            category=issue_data['category'],
+                            severity=issue_data['severity'],
+                            description=issue_data['description'],
+                            code_snippet=issue_data['code_snippet'],
+                            rule_id=issue_data['rule_id'],
+                            code_snippet_data=snippet_data,
+                            context_lines=snippet_data.get('context_lines', 3),
+                            total_lines=snippet_data.get('total_lines')
+                        )
+                        issues.append(issue)
+                    
+                    return issues
                 else:
                     print(f"PostCSS AST analysis failed for {file_path}: {result.stderr}")
                     return []
@@ -455,16 +517,58 @@ class ASTService:
             print(f"Error in PostCSS analysis for {file_path}: {e}")
             return []
     
-    async def extract_code_snippets(self, file_path: Path, line_start: int, line_end: int) -> str:
-        """Extract code snippet with proper line ranges"""
+    async def extract_code_snippets(self, file_path: Path, line_start: int, line_end: int, context_lines: int = 3) -> Dict[str, Any]:
+        """Extract code snippet with proper line ranges and context"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
+            total_lines = len(lines)
+            
+            # Ensure line numbers are within bounds
+            line_start = max(1, line_start)
+            line_end = min(total_lines, line_end)
+            
+            # Add context lines before and after
+            context_start = max(1, line_start - context_lines)
+            context_end = min(total_lines, line_end + context_lines)
+            
             # Extract the relevant lines (1-indexed to 0-indexed)
             snippet_lines = lines[line_start-1:line_end]
-            return ''.join(snippet_lines).strip()
+            context_lines_before = lines[context_start-1:line_start-1] if context_start < line_start else []
+            context_lines_after = lines[line_end:context_end] if line_end < context_end else []
+            
+            # Create enhanced snippet with line numbers and context
+            snippet_data = {
+                "file_path": str(file_path),
+                "line_start": line_start,
+                "line_end": line_end,
+                "total_lines": total_lines,
+                "context_lines": context_lines,
+                "code_snippet": ''.join(snippet_lines).strip(),
+                "context_before": ''.join(context_lines_before).strip(),
+                "context_after": ''.join(context_lines_after).strip(),
+                "full_context": ''.join(lines[context_start-1:context_end]).strip(),
+                "line_numbers": list(range(line_start, line_end + 1)),
+                "context_line_numbers": {
+                    "before": list(range(context_start, line_start)) if context_start < line_start else [],
+                    "after": list(range(line_end + 1, context_end + 1)) if line_end < context_end else []
+                }
+            }
+            
+            return snippet_data
         
         except Exception as e:
             print(f"Error extracting code snippet from {file_path}: {e}")
-            return ""
+            return {
+                "file_path": str(file_path),
+                "line_start": line_start,
+                "line_end": line_end,
+                "error": str(e),
+                "code_snippet": ""
+            }
+    
+    async def extract_code_snippet_simple(self, file_path: Path, line_start: int, line_end: int) -> str:
+        """Simple code snippet extraction for backward compatibility"""
+        snippet_data = await self.extract_code_snippets(file_path, line_start, line_end)
+        return snippet_data.get("code_snippet", "")

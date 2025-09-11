@@ -21,6 +21,10 @@ class Issue(BaseModel):
     description: str
     code_snippet: str
     rule_id: Optional[str] = None
+    # Enhanced code snippet data
+    code_snippet_data: Optional[Dict[str, Any]] = None
+    context_lines: Optional[int] = 3
+    total_lines: Optional[int] = None
 
 class Fix(BaseModel):
     issue_id: str
