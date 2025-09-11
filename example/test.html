@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Infotainment UI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Car Infotainment System</h1>
+        <nav>
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#music">Music</a></li>
+                <li><a href="#navigation">Navigation</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section id="home">
+            <h2>Welcome</h2>
+            <img src="dashboard.jpg" alt="Dashboard view">
+            <p>Welcome to your car's infotainment system.</p>
+        </section>
+
+        <section id="music">
+            <h2>Music Player</h2>
+            <div class="player">
+                <img src="album-cover.jpg">
+                <div class="controls">
+                    <button onclick="playPause()">Play/Pause</button>
+                    <button onclick="nextTrack()">Next</button>
+                    <button onclick="prevTrack()">Previous</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="navigation">
+            <h2>Navigation</h2>
+            <form>
+                <input type="text" name="destination" placeholder="Enter destination">
+                <button type="submit">Navigate</button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Car Infotainment System</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

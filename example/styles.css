@@ -1,0 +1,148 @@
+/* Test Infotainment UI Styles */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #1a1a1a;
+    color: #ffffff;
+}
+
+header {
+    background-color: #2d2d2d;
+    padding: 1rem;
+    border-bottom: 1px solid #444;
+}
+
+h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0 0;
+    display: flex;
+    gap: 2rem;
+}
+
+nav a {
+    color: #ffffff;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+nav a:hover {
+    background-color: #444;
+}
+
+main {
+    padding: 2rem;
+}
+
+section {
+    margin-bottom: 3rem;
+}
+
+h2 {
+    color: #ff6b35;
+    margin-bottom: 1rem;
+}
+
+/* Image styles - missing alt text issues */
+img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+/* Player controls */
+.player {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background-color: #2d2d2d;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+button {
+    background-color: #ff6b35;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #e55a2b;
+}
+
+/* Form styles - missing label issues */
+form {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+input[type="text"] {
+    padding: 0.75rem;
+    border: 1px solid #555;
+    border-radius: 4px;
+    background-color: #2d2d2d;
+    color: white;
+    font-size: 1rem;
+    flex: 1;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #ff6b35;
+}
+
+/* Footer */
+footer {
+    background-color: #2d2d2d;
+    padding: 1rem;
+    text-align: center;
+    border-top: 1px solid #444;
+    margin-top: 3rem;
+}
+
+/* Color contrast issues */
+.warning-text {
+    color: #999999; /* Low contrast */
+}
+
+.success-text {
+    color: #00ff00; /* High contrast but may be too bright */
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    nav ul {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .player {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
