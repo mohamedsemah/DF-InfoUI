@@ -17,6 +17,10 @@ from agents.pour_agents import POURAgents
 from services.file_service import FileService
 from services.validation_service import ValidationService
 from services.report_service import ReportService
+from services.security_service import SecurityService
+from services.performance_service import PerformanceService
+from services.telemetry_service import TelemetryService
+from services.error_handler import ErrorHandler, ErrorCategory, ErrorSeverity
 from models.job import Job, JobStatus
 
 load_dotenv()
@@ -38,6 +42,10 @@ brain_agent = BrainAgent()
 pour_agents = POURAgents()
 validation_service = ValidationService()
 report_service = ReportService()
+security_service = SecurityService()
+performance_service = PerformanceService()
+telemetry_service = TelemetryService()
+error_handler = ErrorHandler()
 
 # In-memory job storage (in production, use Redis or database)
 jobs: Dict[str, Job] = {}
@@ -55,27 +63,76 @@ class JobStatusResponse(BaseModel):
 @app.post("/api/upload", response_model=UploadResponse)
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload a ZIP file and start processing"""
-    if not file.filename.endswith('.zip'):
-        raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
-    
     job_id = str(uuid.uuid4())
-    job = Job(id=job_id, status=JobStatus.UPLOADED)
-    jobs[job_id] = job
     
     try:
+        # Start job tracking
+        await telemetry_service.start_job_tracking(job_id, {
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "size": file.size
+        })
+        
+        # Security validation
+        if not file.filename.endswith('.zip'):
+            await error_handler.handle_error(
+                ValueError("Only ZIP files are allowed"),
+                error_handler.create_error_context(filename=file.filename),
+                ErrorCategory.SECURITY_VIOLATION,
+                ErrorSeverity.HIGH,
+                job_id
+            )
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
         # Save uploaded file
-        await file_service.save_uploaded_file(job_id, file)
-        job.status = JobStatus.UPLOADED
-        job.message = "File uploaded successfully"
+        file_path = await file_service.save_uploaded_file(job_id, file)
+        
+        # Validate ZIP file security
+        security_validation = await security_service.validate_zip_file(file_path)
+        if not security_validation["valid"]:
+            await error_handler.handle_error(
+                ValueError("Security validation failed"),
+                error_handler.create_error_context(
+                    filename=file.filename,
+                    validation_errors=security_validation["errors"]
+                ),
+                ErrorCategory.SECURITY_VIOLATION,
+                ErrorSeverity.HIGH,
+                job_id
+            )
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Security validation failed: {', '.join(security_validation['errors'])}"
+            )
+        
+        # Create job
+        job = Job(id=job_id, status=JobStatus.UPLOADED)
+        jobs[job_id] = job
+        job.message = "File uploaded and validated successfully"
+        
+        # Log successful upload
+        await telemetry_service.log_event(
+            "file_uploaded",
+            f"File {file.filename} uploaded successfully",
+            job_id=job_id,
+            data={"filename": file.filename, "size": file.size}
+        )
         
         # Start processing in background
         background_tasks.add_task(process_job, job_id)
         
         return UploadResponse(job_id=job_id)
+    
     except Exception as e:
-        job.status = JobStatus.ERROR
-        job.message = f"Upload failed: {str(e)}"
-        raise HTTPException(status_code=500, detail=str(e))
+        await error_handler.handle_error(
+            e,
+            error_handler.create_error_context(filename=file.filename),
+            ErrorCategory.FILE_PROCESSING,
+            ErrorSeverity.HIGH,
+            job_id
+        )
+        await telemetry_service.end_job_tracking(job_id, False, {"error": str(e)})
+        raise
 
 @app.get("/api/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
@@ -159,48 +216,149 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "df-infoui-backend"}
 
+@app.get("/api/telemetry/{job_id}")
+async def get_job_telemetry(job_id: str):
+    """Get telemetry data for a specific job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    telemetry_data = await telemetry_service.get_job_telemetry(job_id)
+    return telemetry_data
+
+@app.get("/api/telemetry")
+async def get_system_telemetry():
+    """Get system-wide telemetry data"""
+    telemetry_data = await telemetry_service.get_system_telemetry()
+    return telemetry_data
+
+@app.get("/api/performance/{job_id}")
+async def get_job_performance(job_id: str):
+    """Get performance metrics for a specific job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    performance_data = await performance_service.get_performance_summary(job_id)
+    return performance_data
+
+@app.get("/api/security/{job_id}")
+async def get_job_security_report(job_id: str):
+    """Get security report for a specific job"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # This would need to be implemented to store security validation results
+    return {"message": "Security report not yet implemented"}
+
 async def process_job(job_id: str):
-    """Process a job through all stages"""
+    """Process a job through all stages with performance monitoring and telemetry"""
     job = jobs[job_id]
     
     try:
-        # Stage 1: Brain Agent - Analyze & Detect
-        job.status = JobStatus.PLANNING
-        job.message = "Brain Agent analyzing files and detecting accessibility issues..."
-        job.progress = 20
+        # Monitor overall job performance
+        result = await performance_service.monitor_performance(
+            "job_processing",
+            _process_job_internal,
+            job_id
+        )
         
-        issues = await brain_agent.analyze_files(job_id)
-        job.summary = {"total_issues": len(issues)}
-        
-        # Stage 2: Brain Agent - Coordinate Fixing Process
-        job.status = JobStatus.FIXING
-        job.message = "Brain Agent coordinating POUR agents to fix issues..."
-        job.progress = 40
-        
-        # Brain Agent coordinates the entire fixing process
-        coordination_results = await brain_agent.coordinate_fixing_process(job_id, issues)
-        
-        # Stage 3: Validation
-        job.status = JobStatus.VALIDATING
-        job.message = "Validating fixes with ESLint, axe-core, and TypeScript compilation..."
-        job.progress = 80
-        
-        # Stage 4: Complete
+        # Update job with results
         job.status = JobStatus.COMPLETE
         job.message = "Processing complete! All fixes applied and validated."
         job.progress = 100
-        job.summary.update({
-            "total_issues": coordination_results["total_issues"],
-            "total_fixes": coordination_results["total_fixes"],
-            "agent_reports": coordination_results["agent_reports"],
-            "validation_passed": coordination_results["validation_results"].get("passed", False),
-            "remaining_issues": coordination_results["validation_results"].get("remaining_issues", 0)
-        })
+        job.summary = result.get("summary", {})
+        
+        # End job tracking
+        await telemetry_service.end_job_tracking(job_id, True, result)
         
     except Exception as e:
+        # Handle error with error handler
+        await error_handler.handle_error(
+            e,
+            error_handler.create_error_context(job_id=job_id),
+            ErrorCategory.SYSTEM,
+            ErrorSeverity.HIGH,
+            job_id
+        )
+        
         job.status = JobStatus.ERROR
         job.message = f"Processing failed: {str(e)}"
         job.progress = 0
+        
+        # End job tracking with failure
+        await telemetry_service.end_job_tracking(job_id, False, {"error": str(e)})
+
+async def _process_job_internal(job_id: str):
+    """Internal job processing function for performance monitoring"""
+    job = jobs[job_id]
+    
+    # Stage 1: Brain Agent - Analyze & Detect
+    job.status = JobStatus.PLANNING
+    job.message = "Brain Agent analyzing files and detecting accessibility issues..."
+    job.progress = 20
+    
+    await telemetry_service.log_event(
+        "job_stage_started",
+        "Starting file analysis and issue detection",
+        job_id=job_id,
+        data={"stage": "analysis"}
+    )
+    
+    issues = await brain_agent.analyze_files(job_id)
+    job.summary = {"total_issues": len(issues)}
+    
+    await telemetry_service.log_file_processed(job_id, "analysis_complete", len(issues))
+    
+    # Stage 2: Brain Agent - Coordinate Fixing Process
+    job.status = JobStatus.FIXING
+    job.message = "Brain Agent coordinating POUR agents to fix issues..."
+    job.progress = 40
+    
+    await telemetry_service.log_event(
+        "job_stage_started",
+        "Starting issue fixing coordination",
+        job_id=job_id,
+        data={"stage": "fixing", "issues_count": len(issues)}
+    )
+    
+    # Brain Agent coordinates the entire fixing process
+    coordination_results = await brain_agent.coordinate_fixing_process(job_id, issues)
+    
+    # Stage 3: Validation
+    job.status = JobStatus.VALIDATING
+    job.message = "Validating fixes with ESLint, axe-core, and TypeScript compilation..."
+    job.progress = 80
+    
+    await telemetry_service.log_event(
+        "job_stage_started",
+        "Starting validation process",
+        job_id=job_id,
+        data={"stage": "validation"}
+    )
+    
+    # Stage 4: Complete
+    job.status = JobStatus.COMPLETE
+    job.message = "Processing complete! All fixes applied and validated."
+    job.progress = 100
+    
+    summary = {
+        "total_issues": coordination_results["total_issues"],
+        "total_fixes": coordination_results["total_fixes"],
+        "agent_reports": coordination_results["agent_reports"],
+        "validation_passed": coordination_results["validation_results"].get("passed", False),
+        "remaining_issues": coordination_results["validation_results"].get("remaining_issues", 0)
+    }
+    
+    job.summary.update(summary)
+    
+    # Log completion
+    await telemetry_service.log_event(
+        "job_completed",
+        "Job processing completed successfully",
+        job_id=job_id,
+        data=summary
+    )
+    
+    return {"summary": summary}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

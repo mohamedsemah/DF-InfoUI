@@ -120,13 +120,24 @@ class ValidationService:
         return results
     
     async def _run_axe_validation(self, fixed_dir: Path) -> List[ValidationResult]:
-        """Run axe-core validation on HTML files"""
+        """Run axe-core validation on HTML files and rendered JSX/TSX files"""
         results = []
         
         # Find all HTML files
         html_files = list(fixed_dir.rglob('*.html'))
         
-        for file_path in html_files:
+        # Find JSX/TSX files and render them for axe-core validation
+        from services.ssr_service import SSRService
+        ssr_service = SSRService()
+        
+        # Extract job_id from the path
+        job_id = fixed_dir.parent.name
+        rendered_files = await ssr_service.render_jsx_tsx_files(job_id)
+        
+        # Add rendered files to validation list
+        all_files = html_files + rendered_files
+        
+        for file_path in all_files:
             try:
                 # Create a simple axe-core validation script
                 axe_script = f"""

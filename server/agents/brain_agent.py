@@ -164,15 +164,34 @@ class BrainAgent:
     
     async def _handle_residual_issues(self, job_id: str, validation_results: Dict[str, Any], pour_agents) -> List[Fix]:
         """Handle residual issues by re-routing to appropriate agents"""
-        residual_fixes = []
+        from services.rerouting_service import ReroutingService
         
-        # This is a simplified implementation
-        # In production, you'd analyze the validation results to identify
-        # which specific issues need re-routing
+        rerouting_service = ReroutingService()
         
-        print(f"Found {validation_results.get('remaining_issues', 0)} residual issues")
+        # Analyze validation results to identify residual issues
+        residual_issues = await rerouting_service.analyze_residual_issues(job_id, validation_results)
         
-        return residual_fixes
+        if not residual_issues:
+            print("No residual issues found for re-routing")
+            return []
+        
+        print(f"Found {len(residual_issues)} residual issues for re-routing")
+        
+        # Re-route issues to appropriate POUR agents
+        rerouted_fixes = await rerouting_service.reroute_issues(job_id, residual_issues, pour_agents)
+        
+        if rerouted_fixes:
+            print(f"Generated {len(rerouted_fixes)} re-routed fixes")
+            
+            # Validate the re-routed fixes
+            validation_result = await rerouting_service.validate_rerouted_fixes(job_id, rerouted_fixes)
+            
+            if validation_result["success"]:
+                print("Re-routed fixes successfully resolved remaining issues")
+            else:
+                print(f"Re-routed fixes still leave {validation_result['remaining_issues']} issues unresolved")
+        
+        return rerouted_fixes
     
     def _classify_issues(self, issues: List[Issue]) -> Dict[str, List[Issue]]:
         """Classify issues into POUR categories"""
