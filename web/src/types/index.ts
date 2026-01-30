@@ -9,6 +9,9 @@ export interface JobStatus {
     issues_fixed?: number
     validation_passed?: boolean
     remaining_issues?: number
+    issues_by_category?: Record<string, number>
+    fixes_by_category?: Record<string, number>
+    issues_by_severity?: Record<string, number>
   }
 }
 
