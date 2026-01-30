@@ -27,7 +27,8 @@ class PerformanceService:
     """Service for performance optimization and monitoring"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
         self.metrics_dir = self.data_dir / "metrics"
         self.metrics_dir.mkdir(exist_ok=True)
         

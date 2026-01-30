@@ -23,12 +23,14 @@ class ErrorCategory(Enum):
     VALIDATION = "validation"
     API_REQUEST = "api_request"
     SYSTEM = "system"
+    SECURITY_VIOLATION = "security_violation"
 
 class ErrorHandler:
     """Comprehensive error handling and recovery service"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
         self.logs_dir = self.data_dir / "logs"
         self.logs_dir.mkdir(exist_ok=True)
         
@@ -42,7 +44,8 @@ class ErrorHandler:
             ErrorCategory.PATCH_APPLICATION: self._recover_patch_application_error,
             ErrorCategory.VALIDATION: self._recover_validation_error,
             ErrorCategory.API_REQUEST: self._recover_api_request_error,
-            ErrorCategory.SYSTEM: self._recover_system_error
+            ErrorCategory.SYSTEM: self._recover_system_error,
+            ErrorCategory.SECURITY_VIOLATION: self._recover_security_violation,
         }
     
     def _setup_logging(self):
@@ -170,17 +173,23 @@ class ErrorHandler:
     async def _recover_patch_application_error(self, error: Exception, context: Dict[str, Any], job_id: Optional[str]) -> Dict[str, Any]:
         """Recover from patch application errors"""
         try:
-            if "Patch failed" in str(error):
-                # Try fuzzy matching as fallback
+            if "Patch failed" in str(error) or "patch" in str(error).lower():
                 fix = context.get("fix")
                 if fix and job_id:
                     from services.patch_service import PatchService
+                    from services.file_service import FileService
                     patch_service = PatchService()
-                    
-                    # Try fuzzy matching
-                    fuzzy_result = await patch_service._try_fuzzy_matching([], fix)
-                    if fuzzy_result["success"]:
-                        return {"success": True, "message": "Applied fuzzy matching fallback"}
+                    file_service = FileService()
+                    fixed_dir = file_service.data_dir / job_id / "fixed"
+                    original_dir = file_service.data_dir / job_id / "original"
+                    target_file = patch_service._resolve_target_file(fixed_dir, original_dir, getattr(fix, "file_path", ""))
+                    if target_file.exists():
+                        async with aiofiles.open(target_file, "r", encoding="utf-8") as f:
+                            content = await f.read()
+                        lines = content.split("\n")
+                        fuzzy_result = await patch_service._try_fuzzy_matching(lines, fix)
+                        if fuzzy_result.get("success"):
+                            return {"success": True, "message": "Applied fuzzy matching fallback"}
             
             return {"success": False, "message": "No specific recovery for this patch error"}
         
@@ -241,6 +250,10 @@ class ErrorHandler:
         
         except Exception as e:
             return {"success": False, "message": f"Recovery failed: {str(e)}"}
+    
+    async def _recover_security_violation(self, error: Exception, context: Dict[str, Any], job_id: Optional[str]) -> Dict[str, Any]:
+        """Security violations are not auto-recovered; user must fix input."""
+        return {"success": False, "message": "Security validation failed; please fix the input and retry."}
     
     async def _fix_syntax_errors(self, file_path: Path) -> None:
         """Attempt to fix common syntax errors"""

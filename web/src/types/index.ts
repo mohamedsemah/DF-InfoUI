@@ -5,6 +5,7 @@ export interface JobStatus {
   message: string
   summary?: {
     total_issues?: number
+    total_fixes?: number
     issues_fixed?: number
     validation_passed?: boolean
     remaining_issues?: number

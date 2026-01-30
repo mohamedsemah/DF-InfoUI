@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import List, Dict, Any
 import aiofiles
 from models.job import Fix
+from utils.path_utils import get_data_dir
 
 class FileService:
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir = get_data_dir()
     
     async def save_uploaded_file(self, job_id: str, file) -> None:
         """Save uploaded ZIP file and extract it"""
@@ -156,6 +156,17 @@ class FileService:
     def get_report_json_path(self, job_id: str) -> Path:
         """Get path to JSON report metadata"""
         return self.data_dir / job_id / "report.json"
+    
+    def get_security_validation_path(self, job_id: str) -> Path:
+        """Get path to stored security validation for a job"""
+        return self.data_dir / job_id / "security_validation.json"
+    
+    async def save_security_validation(self, job_id: str, validation: Dict[str, Any]) -> None:
+        """Store security validation result for a job (for /api/security/{job_id})"""
+        path = self.get_security_validation_path(job_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(path, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(validation, indent=2, default=str))
     
     async def save_job_metadata(self, job_id: str, metadata: Dict[str, Any]) -> None:
         """Save job metadata to JSON file"""

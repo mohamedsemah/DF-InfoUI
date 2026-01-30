@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from models.job import ValidationResult
+from utils.path_utils import get_data_dir
 
 class ValidationService:
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        self.data_dir = get_data_dir()
     
     async def validate_fixes(self, job_id: str) -> Dict[str, Any]:
         """Validate fixes using comprehensive validation collection"""
@@ -57,6 +58,37 @@ class ValidationService:
         validation_results.update(await self._analyze_validation_results(validation_results["results"]))
         
         return validation_results
+    
+    async def validate_files_batch(self, files: List[Path]) -> List[ValidationResult]:
+        """Validate a batch of files (e.g. for performance_service.optimize_validation)."""
+        results = []
+        for file_path in files:
+            try:
+                if file_path.suffix.lower() in ['.js', '.jsx', '.ts', '.tsx']:
+                    # Run eslint on this single file
+                    cwd = file_path.parent
+                    cmd = [
+                        'eslint',
+                        '--config', '/dev/null',
+                        '--env', 'browser,es6',
+                        '--format', 'json',
+                        str(file_path)
+                    ]
+                    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(cwd), timeout=30)
+                    if proc.returncode == 0:
+                        results.append(ValidationResult(file_path=str(file_path), passed=True, errors=[], warnings=[]))
+                    else:
+                        try:
+                            out = json.loads(proc.stdout)
+                            errors = [m.get('message', '') for r in out for m in r.get('messages', []) if m.get('severity') == 2]
+                            results.append(ValidationResult(file_path=str(file_path), passed=len(errors) == 0, errors=errors, warnings=[]))
+                        except (json.JSONDecodeError, TypeError):
+                            results.append(ValidationResult(file_path=str(file_path), passed=False, errors=[proc.stderr or 'ESLint failed'], warnings=[]))
+                else:
+                    results.append(ValidationResult(file_path=str(file_path), passed=True, errors=[], warnings=[]))
+            except Exception as e:
+                results.append(ValidationResult(file_path=str(file_path), passed=False, errors=[str(e)], warnings=[]))
+        return results
     
     async def _analyze_validation_results(self, results: List[ValidationResult]) -> Dict[str, Any]:
         """Analyze validation results to provide comprehensive insights"""

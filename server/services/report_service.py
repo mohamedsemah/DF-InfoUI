@@ -7,6 +7,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from models.job import Issue, Fix, ValidationResult
+from utils.path_utils import get_data_dir
 
 # Try to import WeasyPrint, fallback to reportlab if not available
 try:
@@ -18,7 +19,7 @@ except ImportError:
 
 class ReportService:
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        self.data_dir = get_data_dir()
     
     async def generate_pdf_report(self, job_id: str, issues: List[Issue], fixes: List[Fix], validation_results: Dict[str, Any]) -> Path:
         """Generate PDF report with accessibility analysis and fixes"""
@@ -559,7 +560,7 @@ class ReportService:
         
         # Add detailed validation results
         if validation_results.get('results'):
-            html += "<div class="validation-details"><h3>Detailed Validation Results</h3>"
+            html += '<div class="validation-details"><h3>Detailed Validation Results</h3>'
             for result in validation_results['results']:
                 status_class = "validation-passed" if result.passed else "validation-failed"
                 status_text = "PASSED" if result.passed else "FAILED"

@@ -23,7 +23,7 @@ from services.telemetry_service import TelemetryService
 from services.error_handler import ErrorHandler, ErrorCategory, ErrorSeverity
 from models.job import Job, JobStatus
 
-load_dotenv()
+load_dotenv('.env')
 
 app = FastAPI(title="DF-InfoUI", version="1.0.0")
 
@@ -65,6 +65,10 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     """Upload a ZIP file and start processing"""
     job_id = str(uuid.uuid4())
     
+    print(f"DEBUG: Upload request received for file: {file.filename}")
+    print(f"DEBUG: File size: {file.size}")
+    print(f"DEBUG: Content type: {file.content_type}")
+    
     try:
         # Start job tracking
         await telemetry_service.start_job_tracking(job_id, {
@@ -89,6 +93,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
         
         # Validate ZIP file security
         security_validation = await security_service.validate_zip_file(file_path)
+        await file_service.save_security_validation(job_id, security_validation)
         if not security_validation["valid"]:
             await error_handler.handle_error(
                 ValueError("Security validation failed"),
@@ -124,6 +129,11 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
         return UploadResponse(job_id=job_id)
     
     except Exception as e:
+        print(f"DEBUG: Exception occurred during upload: {str(e)}")
+        print(f"DEBUG: Exception type: {type(e)}")
+        import traceback
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
+        
         await error_handler.handle_error(
             e,
             error_handler.create_error_context(filename=file.filename),
@@ -242,12 +252,25 @@ async def get_job_performance(job_id: str):
 
 @app.get("/api/security/{job_id}")
 async def get_job_security_report(job_id: str):
-    """Get security report for a specific job"""
+    """Get security report for a specific job (from ZIP validation at upload)"""
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    # This would need to be implemented to store security validation results
-    return {"message": "Security report not yet implemented"}
+    path = file_service.get_security_validation_path(job_id)
+    if not path.exists():
+        return {"job_id": job_id, "message": "No security validation data for this job (upload predates this feature)."}
+    
+    try:
+        async with aiofiles.open(path, 'r', encoding='utf-8') as f:
+            data = json.loads(await f.read())
+        report = await security_service.create_security_report(
+            job_id,
+            data.get("files", [])
+        )
+        report["validation"] = data
+        return report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load security report: {str(e)}")
 
 async def process_job(job_id: str):
     """Process a job through all stages with performance monitoring and telemetry"""

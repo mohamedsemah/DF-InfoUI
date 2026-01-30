@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        BRAIN AGENT                              │
-│                    (Supervisor/Planner)                        │
+│                    (Supervisor/Planner)                         │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       │ 1. Receives uploaded code files
@@ -16,10 +16,10 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    ISSUE CLASSIFICATION                         │
 │                                                                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐
 │  │ Perceivable │  │  Operable   │  │Understandable│  │   Robust    │
 │  │   Issues    │  │   Issues    │  │   Issues     │  │   Issues    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+│  └─────────────┘  └─────────────┘  └──────────────┘  └─────────────┘
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       │ 4. Sends each group to corresponding neuron
@@ -28,14 +28,14 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    4 POUR NEURON AGENTS                         │
 │                                                                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│  │ Perceivable │  │  Operable   │  │Understandable│  │   Robust    │
-│  │   Agent     │  │   Agent     │  │    Agent     │  │   Agent     │
-│  │             │  │             │  │              │  │             │
-│  │ • Alt text  │  │ • Labels    │  │ • Headings   │  │ • ARIA roles│
-│  │ • Contrast  │  │ • ARIA      │  │ • Forms      │  │ • HTML valid│
-│  │ • Text alt  │  │ • Keyboard  │  │ • Errors     │  │ • Semantic  │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐ ┌─────────────┐
+│  │ Perceivable │  │  Operable   │  │Understandable│ │   Robust    │
+│  │   Agent     │  │   Agent     │  │    Agent     │ │   Agent     │
+│  │             │  │             │  │              │ │             │
+│  │ • Alt text  │  │ • Labels    │  │ • Headings   │ │ • ARIA roles│
+│  │ • Contrast  │  │ • ARIA      │  │ • Forms      │ │ • HTML valid│
+│  │ • Text alt  │  │ • Keyboard  │  │ • Errors     │ │ • Semantic  │
+│  └─────────────┘  └─────────────┘  └──────────────┘ └─────────────┘
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       │ 5. Each neuron generates fixes and reports
@@ -45,14 +45,14 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    NEURON REPORTS                               │
 │                                                                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐
 │  │ Perceivable │  │  Operable   │  │Understandable│  │   Robust    │
 │  │   Report    │  │   Report    │  │   Report     │  │   Report    │
 │  │             │  │             │  │              │  │             │
 │  │ • Fixes     │  │ • Fixes     │  │ • Fixes      │  │ • Fixes     │
 │  │ • Before    │  │ • Before    │  │ • Before     │  │ • Before    │
 │  │ • After     │  │ • After     │  │ • After      │  │ • After     │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘
+│  └─────────────┘  └─────────────┘  └──────────────┘  └─────────────┘
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       │ 6. Brain Agent receives 4 reports
@@ -62,10 +62,10 @@
 │                    BRAIN AGENT                                  │
 │                    (Implementation)                             │
 │                                                                 │
-│ 7. Implements the changes in code files                        │
-│ 8. Validates fixes using ESLint + axe-core                     │
-│ 9. Generates fixed ZIP file                                    │
-│ 10. Creates user-friendly PDF report                           │
+│ 7. Implements the changes in code files                         │
+│ 8. Validates fixes using ESLint + axe-core                      │
+│ 9. Generates fixed ZIP file                                     │
+│ 10. Creates user-friendly PDF report                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

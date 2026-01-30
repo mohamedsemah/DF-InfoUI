@@ -18,7 +18,8 @@ class SecurityService:
     """Comprehensive security and input validation service"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
         
         # Security limits
         self.MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB

@@ -9,7 +9,10 @@ class OperableAgent:
     """Agent responsible for fixing operable accessibility issues"""
     
     def __init__(self):
-        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            raise ValueError("OPENAI_API_KEY environment variable must be set to a valid API key")
+        self.client = openai.OpenAI(api_key=api_key)
         self.model = os.getenv("OPENAI_MODEL", "gpt-5.1")
         self.category = "operable"
     
@@ -65,7 +68,9 @@ class OperableAgent:
                     after_code=new_code,
                     diff=self._create_diff(code, new_code),
                     confidence=0.7,
-                    applied=True
+                    applied=True,
+                    line_start=issue.line_start,
+                    line_end=issue.line_end
                 )
         
         return None
@@ -87,7 +92,9 @@ class OperableAgent:
                 after_code=new_code,
                 diff=self._create_diff(code, new_code),
                 confidence=0.6,
-                applied=True
+                applied=True,
+                line_start=issue.line_start,
+                line_end=issue.line_end
             )
         
         return None
@@ -106,7 +113,9 @@ class OperableAgent:
                 after_code=new_code,
                 diff=self._create_diff(code, new_code),
                 confidence=0.5,
-                applied=True
+                applied=True,
+                line_start=issue.line_start,
+                line_end=issue.line_end
             )
         
         return None
@@ -129,7 +138,9 @@ class OperableAgent:
                 after_code=new_code,
                 diff=self._create_diff(code, new_code),
                 confidence=0.4,
-                applied=True
+                applied=True,
+                line_start=issue.line_start,
+                line_end=issue.line_end
             )
         
         return None
@@ -176,7 +187,9 @@ class OperableAgent:
                     after_code=fix_data["after_code"],
                     diff=self._create_diff(fix_data["before_code"], fix_data["after_code"]),
                     confidence=fix_data["confidence"],
-                    applied=True
+                    applied=True,
+                    line_start=issue.line_start,
+                    line_end=issue.line_end
                 )
         
         except Exception as e:

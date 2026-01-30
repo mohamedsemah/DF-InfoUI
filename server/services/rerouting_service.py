@@ -10,7 +10,8 @@ class ReroutingService:
     """Service for handling residual issues and re-routing them to appropriate agents"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
     
     async def analyze_residual_issues(self, job_id: str, validation_results: Dict[str, Any]) -> List[Issue]:
         """Analyze validation results to identify residual issues that need re-routing"""

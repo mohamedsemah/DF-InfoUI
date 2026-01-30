@@ -10,7 +10,8 @@ class PatchService:
     """Service for line-aware patching with fuzzy matching fallback"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
     
     async def apply_patches_with_line_awareness(self, job_id: str, fixes: List[Fix]) -> Dict[str, Any]:
         """Apply fixes with line-aware patching and fuzzy matching fallback"""
@@ -41,7 +42,7 @@ class PatchService:
         
         # Apply fixes file by file
         for file_path, file_fixes in fixes_by_file.items():
-            file_result = await self._apply_file_patches(fixed_dir, file_path, file_fixes)
+            file_result = await self._apply_file_patches(fixed_dir, original_dir, file_path, file_fixes)
             results["successful_patches"] += file_result["successful"]
             results["failed_patches"] += file_result["failed"]
             results["fuzzy_matches"] += file_result["fuzzy"]
@@ -49,9 +50,21 @@ class PatchService:
         
         return results
     
-    async def _apply_file_patches(self, fixed_dir: Path, file_path: str, fixes: List[Fix]) -> Dict[str, Any]:
+    def _resolve_target_file(self, fixed_dir: Path, original_dir: Path, file_path: str) -> Path:
+        """Resolve file path to target under fixed_dir (handles absolute paths from analysis)."""
+        path = Path(file_path)
+        if path.is_absolute() and str(original_dir) in str(path):
+            try:
+                rel = path.relative_to(original_dir)
+                return fixed_dir / rel
+            except ValueError:
+                pass
+        # Relative path or path with different base: use as-is
+        return fixed_dir / file_path
+
+    async def _apply_file_patches(self, fixed_dir: Path, original_dir: Path, file_path: str, fixes: List[Fix]) -> Dict[str, Any]:
         """Apply patches to a single file with line awareness"""
-        target_file = fixed_dir / file_path
+        target_file = self._resolve_target_file(fixed_dir, original_dir, file_path)
         
         if not target_file.exists():
             return {

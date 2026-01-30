@@ -129,9 +129,9 @@ export function JobDetailPage() {
                 <strong>Total Issues:</strong> {jobStatus.summary.total_issues}
               </div>
             )}
-            {jobStatus.summary.issues_fixed && (
+            {(jobStatus.summary.total_fixes !== undefined || jobStatus.summary.issues_fixed !== undefined) && (
               <div>
-                <strong>Issues Fixed:</strong> {jobStatus.summary.issues_fixed}
+                <strong>Issues Fixed:</strong> {jobStatus.summary.total_fixes ?? jobStatus.summary.issues_fixed}
               </div>
             )}
             {jobStatus.summary.validation_passed !== undefined && (

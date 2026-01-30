@@ -21,6 +21,8 @@ class EventType(Enum):
     JOB_STARTED = "job_started"
     JOB_COMPLETED = "job_completed"
     JOB_FAILED = "job_failed"
+    JOB_STAGE_STARTED = "job_stage_started"
+    FILE_UPLOADED = "file_uploaded"
     FILE_PROCESSED = "file_processed"
     ISSUE_DETECTED = "issue_detected"
     ISSUE_FIXED = "issue_fixed"
@@ -46,7 +48,8 @@ class TelemetryService:
     """Comprehensive logging and telemetry service"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        from utils.path_utils import get_data_dir
+        self.data_dir = get_data_dir()
         self.logs_dir = self.data_dir / "logs"
         self.telemetry_dir = self.data_dir / "telemetry"
         self.metrics_dir = self.data_dir / "metrics"
@@ -224,7 +227,7 @@ class TelemetryService:
                 
                 if event.event_type == EventType.JOB_STARTED.value:
                     job_metrics['start_time'] = event.timestamp
-                elif event.event_type == EventType.JOB_COMPLETED.value:
+                elif event.event_type in (EventType.JOB_COMPLETED.value, "job_completed"):
                     job_metrics['end_time'] = event.timestamp
                 elif event.event_type == EventType.ERROR_OCCURRED.value:
                     job_metrics['errors'] += 1

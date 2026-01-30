@@ -1,11 +1,14 @@
 import axios from 'axios'
 import { JobStatus } from '../types'
 
-const API_BASE_URL = '/api'
+// Use VITE_API_URL in production (e.g. http://localhost:8000) so uploads/downloads work
+const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}/api`
+  : '/api'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 60000,
 })
 
 export const uploadFile = async (file: File): Promise<{ job_id: string }> => {

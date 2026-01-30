@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import asyncio
 from models.job import Issue
+from utils.path_utils import get_data_dir
 
 class ASTService:
     """Service for AST analysis using Babel and PostCSS via node subprocess"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        self.data_dir = get_data_dir()
     
     async def analyze_files_ast(self, job_id: str) -> List[Issue]:
         """Analyze files using AST parsing for better issue detection"""
@@ -35,6 +36,22 @@ class ASTService:
             issues = await self._analyze_css_ast(file_path)
             all_issues.extend(issues)
         
+        return all_issues
+    
+    async def analyze_files_ast_batch(self, files: List[Path]) -> List[Issue]:
+        """Analyze a batch of files with AST; used by performance_service for optimized processing."""
+        all_issues = []
+        for file_path in files:
+            try:
+                if file_path.suffix.lower() in ['.js', '.jsx', '.ts', '.tsx']:
+                    issues = await self._analyze_js_ts_ast(file_path)
+                elif file_path.suffix.lower() == '.css':
+                    issues = await self._analyze_css_ast(file_path)
+                else:
+                    issues = []
+                all_issues.extend(issues)
+            except Exception as e:
+                print(f"Error in batch AST analysis for {file_path}: {e}")
         return all_issues
     
     async def _analyze_js_ts_ast(self, file_path: Path) -> List[Issue]:

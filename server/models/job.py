@@ -34,6 +34,8 @@ class Fix(BaseModel):
     diff: str
     confidence: float
     applied: bool = False
+    line_start: Optional[int] = None  # for line-aware patching
+    line_end: Optional[int] = None
 
 class ValidationResult(BaseModel):
     file_path: str

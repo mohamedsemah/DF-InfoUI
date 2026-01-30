@@ -10,7 +10,10 @@ from models.job import Issue, Fix
 
 class BrainAgent:
     def __init__(self):
-        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            raise ValueError("OPENAI_API_KEY environment variable must be set to a valid API key")
+        self.client = openai.OpenAI(api_key=api_key)
         self.model = os.getenv("OPENAI_MODEL", "gpt-5.1")
     
     async def analyze_files(self, job_id: str) -> List[Issue]:

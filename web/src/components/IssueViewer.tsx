@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, FileText, Code, CheckCircle, GitDiff, Copy, Eye, EyeOff } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Code, CheckCircle, GitCompare, Copy, Eye, EyeOff } from 'lucide-react'
 import { getJobReport } from '../services/api'
 
 interface IssueViewerProps {
@@ -275,7 +275,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                             fontSize: '0.8rem'
                           }}
                         >
-                          <GitDiff size={14} />
+                          <GitCompare size={14} />
                           {!showDiffView.has(issue.id) ? 'Show Side-by-Side' : 'Show Unified Diff'}
                         </button>
                       </div>
@@ -369,7 +369,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                             marginBottom: '0.5rem'
                           }}>
                             <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <GitDiff size={16} />
+                              <GitCompare size={16} />
                               Unified Diff
                             </h4>
                             <button

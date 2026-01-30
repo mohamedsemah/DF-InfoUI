@@ -5,12 +5,13 @@ import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import aiofiles
+from utils.path_utils import get_data_dir
 
 class SSRService:
     """Service for Server-Side Rendering JSX/TSX files for axe-core validation"""
     
     def __init__(self):
-        self.data_dir = Path(os.getenv("DATA_DIR", "/app/data"))
+        self.data_dir = get_data_dir()
     
     async def render_jsx_tsx_files(self, job_id: str) -> List[Path]:
         """Render JSX/TSX files to HTML for axe-core validation"""
