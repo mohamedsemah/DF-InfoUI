@@ -14,9 +14,9 @@ export function Layout({ children, showBack = false, backLabel = 'Back to Home',
       <header className="df-header">
         <Link to="/" className="df-logo">
           <div className="df-logo-icon">
-            <Cpu size={18} color="white" />
+            <Cpu size={20} color="white" strokeWidth={2} />
           </div>
-          DF-InfoUI
+          <span>DF-InfoUI</span>
         </Link>
         <nav className="df-nav">
           {showBack ? (
@@ -25,7 +25,9 @@ export function Layout({ children, showBack = false, backLabel = 'Back to Home',
             <>
               <Link to="/#features">Features</Link>
               <Link to="/#docs">Documentation</Link>
-              <Link to="/upload">Start Analysis</Link>
+              <Link to="/upload" className="btn-primary" style={{ padding: '0.5rem 1.25rem', fontSize: '0.875rem' }}>
+                Start Analysis
+              </Link>
             </>
           )}
         </nav>

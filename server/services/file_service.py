@@ -1,4 +1,5 @@
 import os
+import re
 import zipfile
 import shutil
 import json
@@ -8,10 +9,77 @@ import aiofiles
 from models.job import Fix
 from utils.path_utils import get_data_dir
 
+# File extensions we accept for upload (ZIP is handled separately)
+ALLOWED_EXTENSIONS = {
+    '.html', '.htm', '.css', '.js', '.jsx', '.ts', '.tsx',
+    '.java', '.kt', '.kts', '.xml',
+    '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp',
+}
+
+# Max total size for non-ZIP uploads (50MB)
+MAX_FILES_TOTAL_BYTES = 50 * 1024 * 1024
+# Max single file size (10MB)
+MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024
+# Max number of files when uploading individually
+MAX_FILES_COUNT = 200
+
+
+def _sanitize_filename(name: str) -> str:
+    """Sanitize filename: keep only safe chars, prevent path traversal."""
+    base = os.path.basename(name)
+    base = base.strip()
+    if not base:
+        base = "unnamed"
+    # Replace path separators and other unsafe chars
+    base = re.sub(r'[<>:"|?*\x00-\x1f]', '_', base)
+    if len(base) > 200:
+        stem, ext = os.path.splitext(base)
+        base = stem[: 200 - len(ext)] + ext
+    return base or "unnamed"
+
+
 class FileService:
     def __init__(self):
         self.data_dir = get_data_dir()
-    
+
+    async def save_uploaded_files(self, job_id: str, files: List) -> None:
+        """Save multiple uploaded files into job original/ directory (no ZIP)."""
+        job_dir = self.data_dir / job_id
+        original_dir = job_dir / "original"
+        original_dir.mkdir(parents=True, exist_ok=True)
+        total_size = 0
+        seen_names: Dict[str, int] = {}
+        saved_count = 0
+        for file in files:
+            if not file.filename or not file.filename.strip():
+                continue
+            ext = Path(file.filename).suffix.lower()
+            if ext not in ALLOWED_EXTENSIONS:
+                continue
+            content = await file.read()
+            size = len(content)
+            if size > MAX_SINGLE_FILE_BYTES:
+                raise ValueError(f"File too large: {file.filename} (max {MAX_SINGLE_FILE_BYTES // (1024*1024)}MB)")
+            total_size += size
+            if total_size > MAX_FILES_TOTAL_BYTES:
+                raise ValueError(f"Total upload size exceeds {MAX_FILES_TOTAL_BYTES // (1024*1024)}MB")
+            name = _sanitize_filename(file.filename)
+            if name in seen_names:
+                seen_names[name] += 1
+                stem, suf = os.path.splitext(name)
+                name = f"{stem}_{seen_names[name]}{suf}"
+            else:
+                seen_names[name] = 1
+            path = original_dir / name
+            async with aiofiles.open(path, 'wb') as f:
+                await f.write(content)
+            saved_count += 1
+        if saved_count == 0:
+            raise ValueError(
+                "No supported files in upload. Use: "
+                "HTML, CSS, JS, JSX, TS, TSX, Java, Kotlin, XML, or images (PNG, JPG, SVG, etc.)."
+            )
+
     async def save_uploaded_file(self, job_id: str, file) -> None:
         """Save uploaded ZIP file and extract it"""
         job_dir = self.data_dir / job_id

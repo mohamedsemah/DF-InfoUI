@@ -11,18 +11,19 @@ export const api = axios.create({
   timeout: 60000,
 })
 
-export const uploadFile = async (file: File): Promise<{ job_id: string }> => {
+/** Upload one or more files (ZIP or supported UI/source files). Backend accepts key "files". */
+export const uploadFiles = async (files: File | File[]): Promise<{ job_id: string }> => {
+  const list = Array.isArray(files) ? files : [files]
   const formData = new FormData()
-  formData.append('file', file)
-  
+  list.forEach((file) => formData.append('files', file))
   const response = await api.post('/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    headers: { 'Content-Type': 'multipart/form-data' },
   })
-  
   return response.data
 }
+
+/** @deprecated Use uploadFiles; kept for compatibility. */
+export const uploadFile = uploadFiles
 
 export const getJobStatus = async (jobId: string): Promise<JobStatus> => {
   const response = await api.get(`/status/${jobId}`)

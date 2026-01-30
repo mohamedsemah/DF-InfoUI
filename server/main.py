@@ -3,7 +3,7 @@ import uuid
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,12 +14,12 @@ from dotenv import load_dotenv
 
 from agents.brain_agent import BrainAgent
 from agents.pour_agents import POURAgents
-from services.file_service import FileService
+from services.file_service import FileService, MAX_FILES_COUNT
 from services.validation_service import ValidationService
 from services.report_service import ReportService
 from services.security_service import SecurityService
 from services.performance_service import PerformanceService
-from services.telemetry_service import TelemetryService
+from services.telemetry_service import TelemetryService, EventType
 from services.error_handler import ErrorHandler, ErrorCategory, ErrorSeverity
 from models.job import Job, JobStatus
 
@@ -61,88 +61,87 @@ class JobStatusResponse(BaseModel):
     summary: Optional[Dict[str, Any]] = None
 
 @app.post("/api/upload", response_model=UploadResponse)
-async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """Upload a ZIP file and start processing"""
+async def upload_file(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
+    """Upload a ZIP file (single) or multiple UI/source files and start processing."""
     job_id = str(uuid.uuid4())
-    
-    print(f"DEBUG: Upload request received for file: {file.filename}")
-    print(f"DEBUG: File size: {file.size}")
-    print(f"DEBUG: Content type: {file.content_type}")
-    
-    try:
-        # Start job tracking
-        await telemetry_service.start_job_tracking(job_id, {
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "size": file.size
-        })
-        
-        # Security validation
-        if not file.filename.endswith('.zip'):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided. Upload a ZIP or one or more supported files.")
+    # Single ZIP: use existing flow
+    if len(files) == 1 and files[0].filename and files[0].filename.lower().endswith(".zip"):
+        file = files[0]
+        try:
+            await telemetry_service.start_job_tracking(job_id, {
+                "filename": file.filename,
+                "content_type": file.content_type,
+                "size": file.size
+            })
+            file_path = await file_service.save_uploaded_file(job_id, file)
+            security_validation = await security_service.validate_zip_file(file_path)
+            await file_service.save_security_validation(job_id, security_validation)
+            if not security_validation["valid"]:
+                await error_handler.handle_error(
+                    ValueError("Security validation failed"),
+                    error_handler.create_error_context(
+                        filename=file.filename,
+                        validation_errors=security_validation["errors"]
+                    ),
+                    ErrorCategory.SECURITY_VIOLATION,
+                    ErrorSeverity.HIGH,
+                    job_id
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Security validation failed: {', '.join(security_validation['errors'])}"
+                )
+            job = Job(id=job_id, status=JobStatus.UPLOADED)
+            jobs[job_id] = job
+            job.message = "File uploaded and validated successfully"
+            await telemetry_service.log_event(
+                EventType.FILE_UPLOADED,
+                f"File {file.filename} uploaded successfully",
+                job_id=job_id,
+                data={"filename": file.filename, "size": file.size}
+            )
+            background_tasks.add_task(process_job, job_id)
+            return UploadResponse(job_id=job_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            import traceback
+            print(f"DEBUG: Upload exception: {traceback.format_exc()}")
             await error_handler.handle_error(
-                ValueError("Only ZIP files are allowed"),
+                e,
                 error_handler.create_error_context(filename=file.filename),
-                ErrorCategory.SECURITY_VIOLATION,
+                ErrorCategory.FILE_PROCESSING,
                 ErrorSeverity.HIGH,
                 job_id
             )
-            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
-        
-        # Save uploaded file
-        file_path = await file_service.save_uploaded_file(job_id, file)
-        
-        # Validate ZIP file security
-        security_validation = await security_service.validate_zip_file(file_path)
-        await file_service.save_security_validation(job_id, security_validation)
-        if not security_validation["valid"]:
-            await error_handler.handle_error(
-                ValueError("Security validation failed"),
-                error_handler.create_error_context(
-                    filename=file.filename,
-                    validation_errors=security_validation["errors"]
-                ),
-                ErrorCategory.SECURITY_VIOLATION,
-                ErrorSeverity.HIGH,
-                job_id
-            )
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Security validation failed: {', '.join(security_validation['errors'])}"
-            )
-        
-        # Create job
+            await telemetry_service.end_job_tracking(job_id, False, {"error": str(e)})
+            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+    # Multiple files or single non-ZIP: save into original/ and process
+    filenames = [f.filename or "" for f in files]
+    try:
+        await telemetry_service.start_job_tracking(job_id, {"filenames": filenames, "count": len(files)})
+        if len(files) > MAX_FILES_COUNT:
+            raise HTTPException(status_code=400, detail=f"Too many files. Maximum {MAX_FILES_COUNT} files per upload.")
+        await file_service.save_uploaded_files(job_id, files)
         job = Job(id=job_id, status=JobStatus.UPLOADED)
         jobs[job_id] = job
-        job.message = "File uploaded and validated successfully"
-        
-        # Log successful upload
-        await telemetry_service.log_event(
-            "file_uploaded",
-            f"File {file.filename} uploaded successfully",
-            job_id=job_id,
-            data={"filename": file.filename, "size": file.size}
-        )
-        
-        # Start processing in background
+        job.message = f"{len(files)} file(s) uploaded successfully"
+        await telemetry_service.log_event(EventType.FILE_UPLOADED, f"{len(files)} files uploaded", job_id=job_id, data={"count": len(files), "filenames": filenames})
         background_tasks.add_task(process_job, job_id)
-        
         return UploadResponse(job_id=job_id)
-    
-    except Exception as e:
-        print(f"DEBUG: Exception occurred during upload: {str(e)}")
-        print(f"DEBUG: Exception type: {type(e)}")
-        import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
-        
-        await error_handler.handle_error(
-            e,
-            error_handler.create_error_context(filename=file.filename),
-            ErrorCategory.FILE_PROCESSING,
-            ErrorSeverity.HIGH,
-            job_id
-        )
-        await telemetry_service.end_job_tracking(job_id, False, {"error": str(e)})
+    except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        print(f"DEBUG: Multi-file upload exception: {traceback.format_exc()}")
+        await error_handler.handle_error(e, error_handler.create_error_context(filenames=filenames), ErrorCategory.FILE_PROCESSING, ErrorSeverity.HIGH, job_id)
+        await telemetry_service.end_job_tracking(job_id, False, {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @app.get("/api/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
@@ -320,7 +319,7 @@ async def _process_job_internal(job_id: str):
     job.progress = 20
     
     await telemetry_service.log_event(
-        "job_stage_started",
+        EventType.JOB_STAGE_STARTED,
         "Starting file analysis and issue detection",
         job_id=job_id,
         data={"stage": "analysis"}
@@ -337,7 +336,7 @@ async def _process_job_internal(job_id: str):
     job.progress = 40
     
     await telemetry_service.log_event(
-        "job_stage_started",
+        EventType.JOB_STAGE_STARTED,
         "Starting issue fixing coordination",
         job_id=job_id,
         data={"stage": "fixing", "issues_count": len(issues)}
@@ -352,7 +351,7 @@ async def _process_job_internal(job_id: str):
     job.progress = 80
     
     await telemetry_service.log_event(
-        "job_stage_started",
+        EventType.JOB_STAGE_STARTED,
         "Starting validation process",
         job_id=job_id,
         data={"stage": "validation"}
@@ -375,7 +374,7 @@ async def _process_job_internal(job_id: str):
     
     # Log completion
     await telemetry_service.log_event(
-        "job_completed",
+        EventType.JOB_COMPLETED,
         "Job processing completed successfully",
         job_id=job_id,
         data=summary

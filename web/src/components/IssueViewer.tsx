@@ -100,12 +100,15 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
   const currentIssues = issuesByCategory[activeTab].filter((i: { id: string }) => !dismissedIds.has(i.id))
 
   return (
-    <div style={{ marginTop: '2rem' }}>
-      <h2 className="gradient-text" style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>
+    <div style={{ marginTop: '2.5rem' }}>
+      <p style={{ fontSize: '0.8125rem', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent-purple)', marginBottom: '0.5rem' }}>
+        Fixes
+      </p>
+      <h2 className="gradient-text" style={{ fontSize: 'clamp(1.375rem, 2.5vw, 1.75rem)', marginBottom: '0.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
         Neuron Fixes
       </h2>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-        AI-generated accessibility fixes for your code
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9375rem' }}>
+        AI-generated accessibility fixes for your code. Review and apply by POUR category.
       </p>
 
       <div className="report-tabs" style={{ marginBottom: '1.5rem' }}>
@@ -124,10 +127,10 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
       </div>
 
       {currentIssues.length === 0 ? (
-        <div className="summary-card" style={{ padding: '2rem', textAlign: 'center' }}>
-          <CheckCircle size={48} color="var(--pour-green)" style={{ marginBottom: '1rem' }} />
-          <h3 style={{ color: 'white', marginBottom: '0.5rem' }}>No {activeTab} issues to fix</h3>
-          <p style={{ color: 'var(--text-muted)' }}>All issues in this category have been addressed or dismissed.</p>
+        <div className="card-premium" style={{ padding: '2.5rem', textAlign: 'center' }}>
+          <CheckCircle size={52} color="var(--pour-green)" style={{ marginBottom: '1.25rem' }} strokeWidth={2} />
+          <h3 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem', fontWeight: 600, fontSize: '1.125rem' }}>No {activeTab} issues to fix</h3>
+          <p style={{ color: 'var(--text-secondary)' }}>All issues in this category have been addressed or dismissed.</p>
         </div>
       ) : (
         currentIssues.map((issue: { id: string; file_path: string; description: string; severity: string; rule_id?: string; code_snippet?: string; category: string }) => {
@@ -139,11 +142,11 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
           return (
             <div
               key={issue.id}
-              className="summary-card"
+              className="card-premium"
               style={{
-                padding: '1.5rem',
-                marginBottom: '1rem',
-                borderLeft: '4px solid var(--border)',
+                padding: '1.75rem',
+                marginBottom: '1.25rem',
+                borderLeft: '3px solid var(--border-subtle)',
                 borderLeftColor: issue.severity === 'high' ? 'var(--pour-red)' : issue.severity === 'medium' ? 'var(--pour-orange)' : 'var(--pour-blue)'
               }}
             >
@@ -170,7 +173,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                     <FileText size={14} style={{ marginRight: '0.25rem', verticalAlign: 'middle' }} />
                     {issue.file_path}
                   </div>
-                  <p style={{ color: 'white', margin: 0, fontSize: '0.95rem' }}>{issue.description}</p>
+                  <p style={{ color: 'var(--text-primary)', margin: 0, fontSize: '0.9375rem', lineHeight: 1.5 }}>{issue.description}</p>
                   <span className={`severity-tag ${severityTag.class}`} style={{ marginTop: '0.5rem', display: 'inline-block' }}>
                     {severityTag.label}
                   </span>
@@ -178,7 +181,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
               </div>
 
               {isExpanded && (
-                <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+                <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-subtle)' }}>
                   {fix ? (
                     <>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
@@ -201,16 +204,17 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                       </div>
 
                       <div style={{
-                        padding: '1rem',
+                        padding: '1.25rem',
                         backgroundColor: 'var(--bg-elevated)',
-                        borderRadius: 8,
-                        marginBottom: '1rem'
+                        borderRadius: 12,
+                        marginBottom: '1rem',
+                        border: '1px solid var(--border-subtle)'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                          <Bot size={16} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.8125rem', fontWeight: 600, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                          <Bot size={16} strokeWidth={2} />
                           AI Explanation
                         </div>
-                        <p style={{ margin: 0, color: 'white', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                        <p style={{ margin: 0, color: 'var(--text-primary)', fontSize: '0.9375rem', lineHeight: 1.6 }}>
                           {fix.confidence != null && fix.confidence > 0.7
                             ? 'Added or updated attributes to meet WCAG requirements for this criterion.'
                             : 'Suggested change to improve accessibility compliance.'}
@@ -242,7 +246,7 @@ export function IssueViewer({ jobId, activeTab, onTabChange }: IssueViewerProps)
                       </div>
                     </>
                   ) : (
-                    <div style={{ padding: '1rem', backgroundColor: 'var(--bg-elevated)', borderRadius: 8, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    <div style={{ padding: '1.25rem', backgroundColor: 'var(--bg-elevated)', borderRadius: 12, color: 'var(--text-secondary)', fontSize: '0.9375rem', border: '1px solid var(--border-subtle)' }}>
                       No automated fix available for this issue. Consider addressing it manually.
                     </div>
                   )}

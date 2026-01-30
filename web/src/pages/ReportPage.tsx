@@ -132,11 +132,14 @@ export function ReportPage() {
 
   return (
     <Layout showBack backLabel="Back to Results" backTo={`/job/${jobId}`}>
-      <div className="container" style={{ paddingTop: '1.5rem' }}>
-        <h1 className="gradient-text" style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', marginBottom: '0.25rem' }}>
+      <div className="container" style={{ paddingTop: '2rem' }}>
+        <p style={{ fontSize: '0.8125rem', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>
+          Report
+        </p>
+        <h1 className="gradient-text" style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)', marginBottom: '0.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
           Accessibility Report
         </h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.75rem', fontSize: '0.9375rem' }}>
           Comprehensive analysis with charts and visualizations
         </p>
 
@@ -373,7 +376,7 @@ export function ReportPage() {
                   </defs>
                   <XAxis dataKey="month" stroke="var(--text-muted)" />
                   <YAxis stroke="var(--text-muted)" />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-default)' }} />
                   <Area type="monotone" dataKey="issues" stroke="#ef4444" fillOpacity={1} fill="url(#colorIssues)" name="Issues" />
                   <Area type="monotone" dataKey="fixed" stroke="#22c55e" fillOpacity={1} fill="url(#colorFixed)" name="Fixed" />
                 </AreaChart>

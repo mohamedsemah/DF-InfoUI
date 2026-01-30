@@ -425,6 +425,10 @@ class PerformanceService:
         except Exception as e:
             return {"error": f"Failed to get performance summary: {e}"}
     
+    async def get_job_metrics(self, job_id: str) -> Dict[str, Any]:
+        """Get performance metrics for a job (used by brain agent)."""
+        return await self.get_performance_summary(job_id)
+    
     def _calculate_performance_score(self, metrics: List[Dict[str, Any]]) -> float:
         """Calculate performance score (0-100)"""
         if not metrics:
