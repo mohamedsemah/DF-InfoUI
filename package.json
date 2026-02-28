@@ -1,0 +1,8 @@
+{
+  "name": "df-infoui",
+  "private": true,
+  "scripts": {
+    "build": "cd web && npm ci && npm run build",
+    "install": "cd web && npm install"
+  }
+}
