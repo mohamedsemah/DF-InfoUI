@@ -8,11 +8,25 @@ import asyncio
 from models.job import Issue
 from utils.path_utils import get_data_dir
 
+def _get_node_ast_path() -> Path:
+    """Path to server/node_ast/node_modules so Node can require('@babel/core'), etc."""
+    server_dir = Path(__file__).resolve().parent.parent
+    return server_dir / "node_ast" / "node_modules"
+
+
 class ASTService:
     """Service for AST analysis using Babel and PostCSS via node subprocess"""
     
     def __init__(self):
         self.data_dir = get_data_dir()
+        self._node_path = _get_node_ast_path()
+    
+    def _node_env(self) -> dict:
+        """Environment for Node subprocess; NODE_PATH so require() finds node_ast modules."""
+        env = os.environ.copy()
+        if self._node_path.exists():
+            env["NODE_PATH"] = str(self._node_path)
+        return env
     
     async def analyze_files_ast(self, job_id: str) -> List[Issue]:
         """Analyze files using AST parsing for better issue detection"""
@@ -202,7 +216,8 @@ class ASTService:
                     ['node', script_path],
                     capture_output=True,
                     text=True,
-                    cwd=str(file_path.parent)
+                    cwd=str(file_path.parent),
+                    env=self._node_env(),
                 )
                 
                 if result.returncode == 0:
@@ -343,7 +358,8 @@ class ASTService:
                     ['node', script_path],
                     capture_output=True,
                     text=True,
-                    cwd=str(file_path.parent)
+                    cwd=str(file_path.parent),
+                    env=self._node_env(),
                 )
                 
                 if result.returncode == 0:
@@ -490,7 +506,8 @@ class ASTService:
                     ['node', script_path],
                     capture_output=True,
                     text=True,
-                    cwd=str(file_path.parent)
+                    cwd=str(file_path.parent),
+                    env=self._node_env(),
                 )
                 
                 if result.returncode == 0:

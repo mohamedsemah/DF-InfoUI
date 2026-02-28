@@ -76,6 +76,13 @@ pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+**Optional – JS/CSS AST analysis:** For Babel/Esprima/PostCSS-based analysis (instead of falling back to LLM only), install Node dependencies:
+
+```bash
+cd server/node_ast
+npm install
+```
+
 ### Frontend Development
 ```bash
 cd web

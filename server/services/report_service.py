@@ -9,6 +9,14 @@ from reportlab.lib import colors
 from models.job import Issue, Fix, ValidationResult
 from utils.path_utils import get_data_dir
 
+
+def _escape_reportlab(s: str) -> str:
+    """Escape text for ReportLab Paragraph markup so user code (e.g. <img>) is not interpreted as tags."""
+    if not s:
+        return ""
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 # Try to import WeasyPrint, fallback to reportlab if not available
 try:
     from weasyprint import HTML, CSS
@@ -110,14 +118,14 @@ class ReportService:
             story.append(Paragraph(f"{category.title()} Issues ({len(category_issues)})", styles['Heading3']))
             
             for issue in category_issues:
-                # Issue details
+                # Issue details (escape code/description so e.g. <img> in snippets doesn't break ReportLab)
                 issue_text = f"""
-                <b>File:</b> {Path(issue.file_path).name}<br/>
+                <b>File:</b> {_escape_reportlab(Path(issue.file_path).name)}<br/>
                 <b>Lines:</b> {issue.line_start}-{issue.line_end}<br/>
-                <b>Severity:</b> {issue.severity}<br/>
-                <b>Description:</b> {issue.description}<br/>
+                <b>Severity:</b> {_escape_reportlab(issue.severity)}<br/>
+                <b>Description:</b> {_escape_reportlab(issue.description)}<br/>
                 <b>Code:</b><br/>
-                <font name="Courier">{issue.code_snippet}</font>
+                <font name="Courier">{_escape_reportlab(issue.code_snippet)}</font>
                 """
                 story.append(Paragraph(issue_text, styles['Normal']))
                 story.append(Spacer(1, 10))
@@ -130,14 +138,14 @@ class ReportService:
         for fix in fixes:
             if fix.applied:
                 fix_text = f"""
-                <b>File:</b> {Path(fix.file_path).name}<br/>
+                <b>File:</b> {_escape_reportlab(Path(fix.file_path).name)}<br/>
                 <b>Confidence:</b> {fix.confidence:.1%}<br/>
                 <b>Before:</b><br/>
-                <font name="Courier">{fix.before_code}</font><br/>
+                <font name="Courier">{_escape_reportlab(fix.before_code)}</font><br/>
                 <b>After:</b><br/>
-                <font name="Courier">{fix.after_code}</font><br/>
+                <font name="Courier">{_escape_reportlab(fix.after_code)}</font><br/>
                 <b>Diff:</b><br/>
-                <font name="Courier">{fix.diff}</font>
+                <font name="Courier">{_escape_reportlab(fix.diff)}</font>
                 """
                 story.append(Paragraph(fix_text, styles['Normal']))
                 story.append(Spacer(1, 15))
@@ -149,24 +157,24 @@ class ReportService:
         
         if validation_results.get('results'):
             for result in validation_results['results']:
-                status = "PASSED" if result.passed else "FAILED"
-                status_color = colors.green if result.passed else colors.red
-                
+                passed = result.get('passed', False) if isinstance(result, dict) else result.passed
+                file_path = result.get('file_path', '') if isinstance(result, dict) else result.file_path
+                errors = result.get('errors', []) if isinstance(result, dict) else (result.errors or [])
+                warnings = result.get('warnings', []) if isinstance(result, dict) else (result.warnings or [])
+                status = "PASSED" if passed else "FAILED"
+                status_color = "green" if passed else "red"
                 result_text = f"""
-                <b>File:</b> {Path(result.file_path).name}<br/>
+                <b>File:</b> {_escape_reportlab(Path(file_path).name)}<br/>
                 <b>Status:</b> <font color="{status_color}">{status}</font><br/>
                 """
-                
-                if result.errors:
-                    result_text += f"<b>Errors:</b><br/>"
-                    for error in result.errors:
-                        result_text += f"• {error}<br/>"
-                
-                if result.warnings:
-                    result_text += f"<b>Warnings:</b><br/>"
-                    for warning in result.warnings:
-                        result_text += f"• {warning}<br/>"
-                
+                if errors:
+                    result_text += "<b>Errors:</b><br/>"
+                    for error in errors:
+                        result_text += f"• {_escape_reportlab(str(error))}<br/>"
+                if warnings:
+                    result_text += "<b>Warnings:</b><br/>"
+                    for warning in warnings:
+                        result_text += f"• {_escape_reportlab(str(warning))}<br/>"
                 story.append(Paragraph(result_text, styles['Normal']))
                 story.append(Spacer(1, 10))
         
